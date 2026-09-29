@@ -12,6 +12,7 @@ import {
   LogIn,
   Settings,
   ShieldCheck,
+  QrCode,
 } from 'lucide-react';
 
 interface NavbarProps {
@@ -61,6 +62,7 @@ export const Navbar: React.FC<NavbarProps> = ({
         { id: 'admin_members', label: 'Data Member' },
         { id: 'admin_stays', label: 'Stay & Kunjungan' },
         { id: 'admin_transactions', label: 'Transaksi' },
+        { id: 'admin_points', label: 'Poin & Loyalitas' },
         { id: 'admin_tiers', label: 'Tier & Rules' },
         { id: 'admin_reports', label: 'Laporan' },
       ];
@@ -69,8 +71,10 @@ export const Navbar: React.FC<NavbarProps> = ({
       return [
         { id: 'super_dashboard', label: 'Control Center' },
         { id: 'admin_members', label: 'Member' },
-        { id: 'super_whatsapp', label: 'WhatsApp CRM' },
+        { id: 'admin_points', label: 'Manajemen Poin' },
+        { id: 'admin_transactions', label: 'Transaksi' },
         { id: 'admin_tiers', label: 'Tier Engine' },
+        { id: 'super_whatsapp', label: 'WhatsApp CRM' },
         { id: 'super_admins', label: 'Hak Akses' },
         { id: 'admin_audit', label: 'Audit Log' },
       ];
@@ -118,11 +122,23 @@ export const Navbar: React.FC<NavbarProps> = ({
 
         {/* Zone 3: 1–2 primary actions */}
         <div className="flex items-center gap-2 sm:gap-3">
+          {/* Scanner shortcut button for staff/admins */}
+          {userRole !== 'MEMBER' && (
+            <button
+              onClick={onOpenScanner}
+              className="px-3 py-1.5 bg-[#00A651] hover:bg-[#008f45] text-white rounded-xl transition-all flex items-center gap-1.5 text-xs font-bold shadow-xs cursor-pointer"
+              title="Pindai Kartu Member / QR Code Tamu"
+            >
+              <QrCode className="w-3.5 h-3.5" />
+              <span className="hidden sm:inline">Pindai Kartu</span>
+            </button>
+          )}
+
           {/* Global Search button for staff */}
           {userRole !== 'MEMBER' && (
             <button
               onClick={onSearchClick}
-              className="p-2 text-emerald-200 hover:text-white hover:bg-[#0c3522] rounded-xl transition-colors flex items-center gap-1.5 text-xs border border-[#13492e]"
+              className="p-2 text-emerald-200 hover:text-white hover:bg-[#0c3522] rounded-xl transition-colors flex items-center gap-1.5 text-xs border border-[#13492e] cursor-pointer"
               title="Cari Member atau Transaksi"
             >
               <Search className="w-4 h-4 text-emerald-400" />

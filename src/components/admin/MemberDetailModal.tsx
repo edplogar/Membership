@@ -100,6 +100,16 @@ export const MemberDetailModal: React.FC<MemberDetailModalProps> = ({
               </div>
             </div>
 
+            {onActionAdjustPoints && (
+              <button
+                onClick={() => onActionAdjustPoints(member)}
+                className="px-3 py-1.5 bg-amber-600 hover:bg-amber-700 text-white rounded-lg text-xs font-semibold shadow-xs transition-colors flex items-center gap-1.5"
+              >
+                <Coins className="w-3.5 h-3.5" />
+                <span>Sesuaikan Poin</span>
+              </button>
+            )}
+
             {onActionChangeTier && (
               <button
                 onClick={() => onActionChangeTier(member)}

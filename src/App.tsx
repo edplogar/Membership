@@ -99,6 +99,7 @@ function MainApp() {
   };
 
   const handleAdjustPointsMember = (member: Member) => {
+    setSelectedMemberForDetail(null);
     setPrefilledMember(member);
     setActiveTab('admin_points');
     setIsAdjustPointsOpen(true);
@@ -253,6 +254,16 @@ function MainApp() {
                 onCloseAddModal={() => setIsAddMemberOpen(false)}
               />
             )}
+            {activeTab === 'admin_points' && (
+              <PointsManagement
+                preselectedMember={prefilledMember}
+                isOpenAdjustModal={isAdjustPointsOpen}
+                onCloseAdjustModal={() => {
+                  setIsAdjustPointsOpen(false);
+                  setPrefilledMember(null);
+                }}
+              />
+            )}
             {activeTab === 'super_admins' && <AdminUsersManagement />}
             {activeTab === 'super_roles' && <RolePermissionsMatrix />}
             {activeTab === 'super_whatsapp' && <WhatsAppCRMHub />}
@@ -298,6 +309,10 @@ function MainApp() {
         onActionAddTransaction={handleAddTxMember}
         onActionAdjustPoints={handleAdjustPointsMember}
         onActionViewProfile={handleViewProfileMember}
+        onOpenAddMember={() => {
+          setActiveTab('admin_members');
+          setIsAddMemberOpen(true);
+        }}
       />
 
       {/* 5. Comprehensive Member Customer Profile Modal */}

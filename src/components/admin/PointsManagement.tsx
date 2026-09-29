@@ -73,11 +73,18 @@ export const PointsManagement: React.FC<PointsManagementProps> = ({
     <div className="space-y-6 pb-12 animate-in fade-in duration-200">
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
         <div>
-          <h1 className="font-serif-luxury text-2xl font-bold text-stone-900">
-            Manajemen Poin & Loyalitas
+          <div className="flex items-center gap-2">
+            <span className="px-2.5 py-0.5 rounded-full text-[10px] font-bold bg-[#00A651]/15 text-[#00A651] border border-[#00A651]/30">
+              Loyalty & Rewards
+            </span>
+            <span className="text-xs text-stone-400">·</span>
+            <span className="text-xs text-stone-500 font-medium">Hotel Guest Points</span>
+          </div>
+          <h1 className="font-serif-luxury text-2xl font-bold text-stone-900 mt-1">
+            Manajemen Poin & Loyalitas Tamu
           </h1>
           <p className="text-xs text-stone-500 mt-1">
-            Penyesuaian manual poin tamu dengan catatan audit serta konfigurasi
+            Penyesuaian manual saldo poin tamu dengan catatan audit serta konfigurasi
             rasio perolehan poin per transaksi.
           </p>
         </div>
@@ -85,7 +92,7 @@ export const PointsManagement: React.FC<PointsManagementProps> = ({
         <div className="flex items-center gap-2.5">
           <button
             onClick={() => setIsConfigOpen(true)}
-            className="px-3.5 py-2 bg-white hover:bg-stone-50 text-stone-700 border border-stone-300 rounded-xl text-xs font-semibold flex items-center gap-1.5 shadow-xs"
+            className="px-3.5 py-2 bg-white hover:bg-stone-50 text-stone-700 border border-stone-300 rounded-xl text-xs font-semibold flex items-center gap-1.5 shadow-xs transition-colors cursor-pointer"
           >
             <Settings className="w-3.5 h-3.5 text-stone-500" />
             <span>Aturan Perhitungan Poin</span>
@@ -93,7 +100,7 @@ export const PointsManagement: React.FC<PointsManagementProps> = ({
 
           <button
             onClick={() => setInternalModalOpen(true)}
-            className="px-4 py-2 bg-amber-600 hover:bg-amber-700 text-white rounded-xl text-xs font-semibold flex items-center gap-1.5 shadow-xs transition-colors"
+            className="px-4 py-2 bg-[#00A651] hover:bg-[#008F45] text-white rounded-xl text-xs font-bold flex items-center gap-1.5 shadow-xs transition-colors cursor-pointer"
           >
             <Coins className="w-4 h-4" />
             <span>+ Penyesuaian Manual Poin</span>
@@ -102,15 +109,17 @@ export const PointsManagement: React.FC<PointsManagementProps> = ({
       </div>
 
       {/* Rules Summary Card */}
-      <div className="p-5 bg-linear-to-r from-stone-900 to-stone-950 text-white rounded-2xl border border-stone-800 shadow-sm flex flex-col md:flex-row md:items-center justify-between gap-4">
-        <div>
-          <div className="text-[10px] font-mono text-amber-400 uppercase tracking-widest font-semibold">
+      <div className="p-6 bg-gradient-to-r from-[#072417] via-[#0A3320] to-[#04160E] text-white rounded-2xl border border-[#0E4029] shadow-md flex flex-col md:flex-row md:items-center justify-between gap-4 relative overflow-hidden">
+        <div className="absolute top-0 right-0 w-64 h-64 bg-[#00A651]/10 rounded-full blur-2xl pointer-events-none" />
+        <div className="relative z-10">
+          <div className="text-[10px] font-mono text-[#C5A869] uppercase tracking-widest font-bold flex items-center gap-1.5">
+            <span className="w-1.5 h-1.5 rounded-full bg-[#C5A869]" />
             KONFIGURASI LOYALITAS AKTIF
           </div>
-          <h3 className="font-serif-luxury text-base font-bold mt-1">
+          <h3 className="font-serif-luxury text-lg font-bold mt-1 text-white">
             {formatIDR(pointRules.rupiahPerPoint)} Belanja = 1 Poin Loyalitas
           </h3>
-          <p className="text-xs text-stone-300 mt-1 max-w-xl">
+          <p className="text-xs text-emerald-100/80 mt-1 max-w-xl leading-relaxed">
             Bonus Ulang Tahun: +{pointRules.birthdayBonusPoints} pts · Bonus
             Referral: +{pointRules.referralBonusReferrer} pts · Kadaluwarsa Poin:{' '}
             {pointRules.pointExpiryMonths} bulan
@@ -119,7 +128,7 @@ export const PointsManagement: React.FC<PointsManagementProps> = ({
 
         <button
           onClick={() => setIsConfigOpen(true)}
-          className="px-4 py-2 bg-stone-800 hover:bg-stone-700 text-amber-300 border border-stone-700 rounded-xl text-xs font-semibold shrink-0 transition-colors"
+          className="relative z-10 px-4 py-2.5 bg-[#00A651]/20 hover:bg-[#00A651]/30 text-[#4ADE80] border border-[#00A651]/40 rounded-xl text-xs font-bold shrink-0 transition-colors cursor-pointer"
         >
           Ubah Formula Poin
         </button>

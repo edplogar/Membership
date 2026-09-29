@@ -22,6 +22,7 @@ import {
   Globe,
   ExternalLink,
   Copy,
+  Coins,
 } from 'lucide-react';
 import {
   sendWhatsAppMessageViaPing,
@@ -619,7 +620,30 @@ export const SuperAdminControlCenter: React.FC<SuperAdminControlCenterProps> = (
             </div>
           </div>
 
-          {/* 2. Tier & Dynamic Rule Engine */}
+          {/* 2. Manajemen & Penyesuaian Poin Tamu (Super Admin Direct Action) */}
+          <div
+            onClick={() => onNavigate('admin_points')}
+            className="p-5 bg-white rounded-2xl border-2 border-amber-600/30 hover:border-amber-600 hover:shadow-md transition-all cursor-pointer group flex flex-col justify-between"
+          >
+            <div>
+              <div className="w-10 h-10 rounded-xl bg-amber-50 text-amber-700 flex items-center justify-center mb-3 group-hover:scale-105 transition-transform">
+                <Coins className="w-5 h-5 text-amber-600" />
+              </div>
+              <h3 className="font-bold text-sm text-stone-900 group-hover:text-amber-900 transition-colors flex items-center justify-between">
+                <span>Manajemen & Penyesuaian Poin</span>
+                <ArrowRight className="w-4 h-4 text-stone-400 group-hover:translate-x-1 transition-transform" />
+              </h3>
+              <p className="text-xs text-stone-500 mt-1 leading-relaxed">
+                Penyesuaian manual saldo poin tamu (Goodwill/Kompensasi), aturan rumus rupiah per poin, dan histori buku besar.
+              </p>
+            </div>
+            <div className="mt-4 pt-3 border-t border-stone-100 flex items-center justify-between text-[11px] text-amber-800 font-semibold">
+              <span>Audit Log Otomatis</span>
+              <span>Buka Modul Poin →</span>
+            </div>
+          </div>
+
+          {/* 3. Tier & Dynamic Rule Engine */}
           <div
             onClick={() => onNavigate('admin_tiers')}
             className="p-5 bg-white rounded-2xl border border-stone-200 hover:border-amber-500 hover:shadow-md transition-all cursor-pointer group flex flex-col justify-between"
