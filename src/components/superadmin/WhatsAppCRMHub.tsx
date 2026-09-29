@@ -111,7 +111,7 @@ export const WhatsAppCRMHub: React.FC = () => {
   const [accountEmail, setAccountEmail] = useState(whatsappConfig.accountEmail || 'it.management@lombokgardenhotel.com');
   const [deviceName, setDeviceName] = useState(whatsappConfig.deviceName || 'Lombok Garden Hotel CRM Bot');
 
-  const currentOrigin = typeof window !== 'undefined' ? window.location.origin : 'https://membership.lombokgardenhotel.com';
+  const currentOrigin = typeof window !== 'undefined' ? window.location.origin : 'https://member.lombokgardenhotel.com';
   const liveWebhookEndpoint = `${currentOrigin}/api/whatsapp/webhook`;
 
   // Guide toggle and copy state

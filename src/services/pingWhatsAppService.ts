@@ -60,6 +60,13 @@ export const DEFAULT_WEBHOOK_RULES: WhatsAppWebhookRule[] = [
   },
 ];
 
+export function getBaseAppUrl(): string {
+  if (typeof window !== 'undefined' && window.location?.origin) {
+    return window.location.origin;
+  }
+  return 'https://member.lombokgardenhotel.com';
+}
+
 export const INITIAL_PING_CONFIG: PingCoIdWhatsAppConfig = {
   apiKey: 'ping_live_8912734190abcdef88912',
   apiUrl: 'https://api.ping.co.id/v1',
@@ -70,7 +77,7 @@ export const INITIAL_PING_CONFIG: PingCoIdWhatsAppConfig = {
   deviceStatus: 'connected',
   webhookUrl: typeof window !== 'undefined'
     ? `${window.location.origin}/api/whatsapp/webhook`
-    : 'https://membership.lombokgardenhotel.com/api/whatsapp/webhook',
+    : 'https://member.lombokgardenhotel.com/api/whatsapp/webhook',
   webhookSecret: 'whsec_lgh_982347abcdef88912',
   autoSendWelcomeCard: true,
   autoSendPointUpdate: true,
@@ -348,7 +355,7 @@ export function formatWelcomeWhatsApp(
   tier: MembershipTier,
   config: PingCoIdWhatsAppConfig
 ): string {
-  const cardUrl = `https://membership.lombokgardenhotel.com/card/${member.membershipNumber}`;
+  const cardUrl = `${getBaseAppUrl()}/card/${member.membershipNumber}`;
   return (config.messageTemplateWelcome || INITIAL_PING_CONFIG.messageTemplateWelcome)
     .replace('{fullName}', member.fullName)
     .replace('{membershipNumber}', member.membershipNumber)

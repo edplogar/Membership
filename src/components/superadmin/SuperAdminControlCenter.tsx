@@ -124,7 +124,7 @@ export const SuperAdminControlCenter: React.FC<SuperAdminControlCenterProps> = (
     setIsSendingQuickTest(true);
     setQuickTestFeedback(null);
 
-    const origin = typeof window !== 'undefined' ? window.location.origin : 'https://membership.lombokgardenhotel.com';
+    const origin = typeof window !== 'undefined' ? window.location.origin : 'https://member.lombokgardenhotel.com';
     let message = '🌿 *Tes Gateway ping.co.id Berhasil!*\n\nSistem CRM WhatsApp Lombok Garden Hotel telah terhubung ke cloud database Firestore secara real-time.';
     let type: 'welcome' | 'point_update' | 'tier_upgrade' | 'voucher' | 'broadcast' | 'chat' = 'chat';
 

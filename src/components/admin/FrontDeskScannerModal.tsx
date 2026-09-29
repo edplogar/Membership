@@ -2,6 +2,7 @@ import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { useApp } from '../../context/AppContext';
 import { Member, MembershipTier } from '../../types';
 import { Modal } from '../common/Modal';
+import { LombokGardenLogo } from '../common/LombokGardenLogo';
 import { formatDateIndo } from '../../services/membershipEngine';
 import jsQR from 'jsqr';
 import {
@@ -18,12 +19,16 @@ import {
   RefreshCw,
   Upload,
   SwitchCamera,
-  Check,
   Volume2,
   VolumeX,
-  UserPlus,
   QrCode,
   ScanLine,
+  CheckCircle2,
+  ShieldCheck,
+  Zap,
+  MapPin,
+  Flame,
+  ArrowRight,
 } from 'lucide-react';
 
 interface FrontDeskScannerModalProps {
@@ -47,13 +52,14 @@ export const FrontDeskScannerModal: React.FC<FrontDeskScannerModalProps> = ({
 }) => {
   const { members, tiers } = useApp();
 
-  // Mode: 'camera' | 'manual' | 'upload'
-  const [scanMode, setScanMode] = useState<'camera' | 'manual' | 'upload'>('camera');
+  // Mode: 'camera' | 'upload' | 'manual'
+  const [scanMode, setScanMode] = useState<'camera' | 'upload' | 'manual'>('camera');
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedMember, setSelectedMember] = useState<Member | null>(null);
   const [lastScannedRaw, setLastScannedRaw] = useState<string | null>(null);
   const [scanError, setScanError] = useState<string | null>(null);
   const [soundEnabled, setSoundEnabled] = useState(true);
+  const [isFlashing, setIsFlashing] = useState(false);
 
   // Camera state
   const [cameraState, setCameraState] = useState<'idle' | 'requesting' | 'active' | 'denied' | 'unsupported' | 'error'>('idle');
@@ -68,8 +74,42 @@ export const FrontDeskScannerModal: React.FC<FrontDeskScannerModalProps> = ({
   const animationFrameRef = useRef<number | null>(null);
   const lastDetectionTimeRef = useRef<number>(0);
 
-  // Sound beep helper using Web Audio API
-  const playBeep = useCallback((success: boolean = true) => {
+  // Harmonious Multi-Tone Luxury Concierge Chime via Web Audio API
+  const playSuccessChime = useCallback(() => {
+    if (!soundEnabled) return;
+    try {
+      const AudioCtx = window.AudioContext || (window as unknown as { webkitAudioContext: typeof AudioContext }).webkitAudioContext;
+      if (!AudioCtx) return;
+      const ctx = new AudioCtx();
+
+      // Major chord ascent: C5 -> E5 -> G5 -> C6
+      const chord = [523.25, 659.25, 783.99, 1046.50];
+      chord.forEach((freq, idx) => {
+        const osc = ctx.createOscillator();
+        const gain = ctx.createGain();
+        const noteStart = ctx.currentTime + idx * 0.055;
+        const noteDuration = 0.38 - idx * 0.04;
+
+        osc.type = 'sine';
+        osc.frequency.setValueAtTime(freq, noteStart);
+
+        gain.gain.setValueAtTime(0, noteStart);
+        gain.gain.linearRampToValueAtTime(0.18, noteStart + 0.015);
+        gain.gain.exponentialRampToValueAtTime(0.001, noteStart + noteDuration);
+
+        osc.connect(gain);
+        gain.connect(ctx.destination);
+
+        osc.start(noteStart);
+        osc.stop(noteStart + noteDuration);
+      });
+    } catch {
+      // Audio context might be restricted before user interaction
+    }
+  }, [soundEnabled]);
+
+  // Error buzz sound
+  const playErrorBuzz = useCallback(() => {
     if (!soundEnabled) return;
     try {
       const AudioCtx = window.AudioContext || (window as unknown as { webkitAudioContext: typeof AudioContext }).webkitAudioContext;
@@ -78,22 +118,18 @@ export const FrontDeskScannerModal: React.FC<FrontDeskScannerModalProps> = ({
       const osc = ctx.createOscillator();
       const gain = ctx.createGain();
 
-      osc.type = success ? 'sine' : 'sawtooth';
-      osc.frequency.setValueAtTime(success ? 880 : 300, ctx.currentTime); // A5 or low buzz
-      if (success) {
-        osc.frequency.exponentialRampToValueAtTime(1320, ctx.currentTime + 0.12); // E6
-      }
-
-      gain.gain.setValueAtTime(0.2, ctx.currentTime);
-      gain.gain.exponentialRampToValueAtTime(0.01, ctx.currentTime + (success ? 0.2 : 0.3));
+      osc.type = 'sawtooth';
+      osc.frequency.setValueAtTime(220, ctx.currentTime);
+      gain.gain.setValueAtTime(0.12, ctx.currentTime);
+      gain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + 0.25);
 
       osc.connect(gain);
       gain.connect(ctx.destination);
 
       osc.start();
-      osc.stop(ctx.currentTime + (success ? 0.22 : 0.32));
+      osc.stop(ctx.currentTime + 0.26);
     } catch {
-      // Audio context might be restricted before interaction
+      // ignore
     }
   }, [soundEnabled]);
 
@@ -111,7 +147,7 @@ export const FrontDeskScannerModal: React.FC<FrontDeskScannerModalProps> = ({
     setLastScannedRaw(clean);
     setScanError(null);
 
-    // Try parsing if payload is JSON (some custom QR codes)
+    // Try parsing if payload is JSON
     let searchKey = clean;
     try {
       if (clean.startsWith('{') && clean.endsWith('}')) {
@@ -119,10 +155,10 @@ export const FrontDeskScannerModal: React.FC<FrontDeskScannerModalProps> = ({
         searchKey = parsed.membershipNumber || parsed.id || parsed.email || clean;
       }
     } catch {
-      // Not json, use clean raw string
+      // Not json
     }
 
-    // Extract code if clean is a URL like https://hotel.com/member/LGH-1234
+    // Extract code if clean is a URL like https://member.lombokgardenhotel.com/card/LGH-1234
     if (searchKey.includes('/')) {
       const parts = searchKey.split('/');
       const lastPart = parts[parts.length - 1];
@@ -144,14 +180,25 @@ export const FrontDeskScannerModal: React.FC<FrontDeskScannerModalProps> = ({
     );
 
     if (found) {
-      playBeep(true);
+      // Trigger camera flash animation & audio chime
+      setIsFlashing(true);
+      playSuccessChime();
+
+      // Trigger light haptic feedback on mobile devices
+      if (typeof navigator !== 'undefined' && navigator.vibrate) {
+        try {
+          navigator.vibrate([40, 50, 60]);
+        } catch {}
+      }
+
+      setTimeout(() => setIsFlashing(false), 850);
       setSelectedMember(found);
       setSearchQuery('');
     } else {
-      playBeep(false);
-      setScanError(`Kode "${clean}" terdeteksi, namun tidak cocok dengan data member yang tersimpan.`);
+      playErrorBuzz();
+      setScanError(`Kode "${clean}" terdeteksi, namun tidak cocok dengan nomor kartu atau ID member terdaftar.`);
     }
-  }, [members, lastScannedRaw, playBeep]);
+  }, [members, lastScannedRaw, playSuccessChime, playErrorBuzz]);
 
   // Stop camera tracks cleanly
   const stopCamera = useCallback(() => {
@@ -195,7 +242,7 @@ export const FrontDeskScannerModal: React.FC<FrontDeskScannerModalProps> = ({
         ctx.drawImage(video, 0, 0, width, height);
         const imageData = ctx.getImageData(0, 0, width, height);
 
-        // 1. Scan using jsQR
+        // Scan using jsQR
         const code = jsQR(imageData.data, imageData.width, imageData.height, {
           inversionAttempts: 'attemptBoth',
         });
@@ -223,7 +270,6 @@ export const FrontDeskScannerModal: React.FC<FrontDeskScannerModalProps> = ({
     setCameraErrorMessage(null);
 
     try {
-      // Build constraints
       const constraints: MediaStreamConstraints = {
         audio: false,
         video: selectedDeviceId
@@ -246,7 +292,6 @@ export const FrontDeskScannerModal: React.FC<FrontDeskScannerModalProps> = ({
 
       setCameraState('active');
 
-      // Enumerate available video inputs
       try {
         const devices = await navigator.mediaDevices.enumerateDevices();
         const videoInputs = devices.filter((d) => d.kind === 'videoinput');
@@ -255,7 +300,6 @@ export const FrontDeskScannerModal: React.FC<FrontDeskScannerModalProps> = ({
         // ignore device listing error
       }
 
-      // Start scan loop
       animationFrameRef.current = requestAnimationFrame(scanVideoFrame);
     } catch (err: unknown) {
       const errObj = err as Error;
@@ -273,7 +317,7 @@ export const FrontDeskScannerModal: React.FC<FrontDeskScannerModalProps> = ({
     }
   }, [facingMode, selectedDeviceId, scanVideoFrame, stopCamera]);
 
-  // Lifecycle when modal opens or closes or mode changes
+  // Lifecycle
   useEffect(() => {
     if (isOpen && scanMode === 'camera') {
       startCamera();
@@ -286,7 +330,7 @@ export const FrontDeskScannerModal: React.FC<FrontDeskScannerModalProps> = ({
     };
   }, [isOpen, scanMode, startCamera, stopCamera]);
 
-  // Select initial member if none selected on open
+  // Initial selection
   useEffect(() => {
     if (isOpen && !selectedMember && members.length > 0) {
       setSelectedMember(members[0]);
@@ -322,8 +366,8 @@ export const FrontDeskScannerModal: React.FC<FrontDeskScannerModalProps> = ({
           if (code && code.data) {
             handleDecodedData(code.data);
           } else {
-            playBeep(false);
-            setScanError('Tidak dapat mendeteksi kode QR atau barcode pada gambar yang diunggah. Pastikan gambar jelas dan terang.');
+            playErrorBuzz();
+            setScanError('Tidak dapat mendeteksi kode QR atau barcode pada gambar yang diunggah. Pastikan foto kartu jelas dan terang.');
           }
         }
       };
@@ -333,14 +377,6 @@ export const FrontDeskScannerModal: React.FC<FrontDeskScannerModalProps> = ({
     e.target.value = '';
   };
 
-  // Filtered members for manual search
-  const filteredMembers = members.filter(
-    (m) =>
-      m.membershipNumber.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      m.fullName.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      m.phone.includes(searchQuery)
-  );
-
   const currentTier: MembershipTier = selectedMember
     ? tiers.find((t) => t.id === selectedMember.tierId) || tiers[0]
     : tiers[0];
@@ -349,24 +385,67 @@ export const FrontDeskScannerModal: React.FC<FrontDeskScannerModalProps> = ({
     <Modal
       isOpen={isOpen}
       onClose={onClose}
-      title="Front Desk QR Scanner & Verifikasi Kartu Member"
-      subtitle="Arahkan kamera ke kartu member fisik atau kartu digital tamu untuk verifikasi instan"
+      title=""
       maxWidth="2xl"
     >
-      <div className="space-y-5 -mt-2">
-        {/* Navigation Tabs (Kamera Langsung, Upload Gambar, Cari Manual) */}
-        <div className="flex items-center justify-between border-b border-stone-200 pb-3">
-          <div className="flex items-center gap-1.5 p-1 bg-stone-100 rounded-xl">
+      <div className="space-y-4 -mt-3">
+        {/* Lombok Garden Hotel Branded Modal Header */}
+        <div className="bg-gradient-to-r from-[#072417] via-[#0A3320] to-[#072417] p-4 sm:p-5 rounded-2xl text-white relative overflow-hidden shadow-sm border border-[#00A651]/30">
+          {/* Subtle Ambient Glow */}
+          <div className="absolute top-0 right-0 w-48 h-48 bg-[#00A651]/20 rounded-full blur-2xl pointer-events-none -mr-10 -mt-10" />
+          <div className="absolute bottom-0 left-0 w-40 h-40 bg-[#C5A869]/15 rounded-full blur-2xl pointer-events-none -ml-10 -mb-10" />
+
+          <div className="relative z-10 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+            <div className="flex items-center gap-3">
+              <div className="p-2 bg-white rounded-xl shadow-xs border border-[#00A651]/30 shrink-0">
+                <LombokGardenLogo variant="horizontal" size="sm" />
+              </div>
+              <div>
+                <div className="flex items-center gap-1.5">
+                  <span className="text-[10px] font-bold uppercase tracking-widest text-[#C5A869] font-mono">
+                    Front Desk Operations
+                  </span>
+                  <span className="text-emerald-400">&bull;</span>
+                  <span className="text-[10px] text-emerald-300 font-semibold">QR Scanner & Verifikasi</span>
+                </div>
+                <h3 className="font-serif text-base sm:text-lg font-bold text-white tracking-tight leading-tight mt-0.5">
+                  Pemindai Kartu Member Digital & Fisik
+                </h3>
+              </div>
+            </div>
+
+            {/* Sound & Scan Options */}
+            <div className="flex items-center gap-2 self-start sm:self-center">
+              <button
+                type="button"
+                onClick={() => setSoundEnabled(!soundEnabled)}
+                className={`px-2.5 py-1.5 rounded-xl border text-xs font-semibold flex items-center gap-1.5 transition-all cursor-pointer ${
+                  soundEnabled
+                    ? 'bg-[#00A651]/20 border-[#00A651]/50 text-emerald-300'
+                    : 'bg-emerald-950/60 border-emerald-900 text-stone-400'
+                }`}
+                title={soundEnabled ? 'Suara Chime Berhasil Aktif' : 'Suara Nonaktif'}
+              >
+                {soundEnabled ? <Volume2 className="w-3.5 h-3.5 text-[#00A651]" /> : <VolumeX className="w-3.5 h-3.5" />}
+                <span className="text-[11px]">{soundEnabled ? 'Chime ON' : 'Mute'}</span>
+              </button>
+            </div>
+          </div>
+        </div>
+
+        {/* Navigation Tabs (Kamera Langsung, Upload Foto Kartu, Cari Manual) */}
+        <div className="flex items-center justify-between border-b border-[#E5DFD3] pb-2.5">
+          <div className="flex items-center gap-1.5 p-1 bg-[#F4F1EA] rounded-xl border border-[#E5DFD3]">
             <button
               type="button"
               onClick={() => setScanMode('camera')}
               className={`px-3.5 py-1.5 rounded-lg text-xs font-bold flex items-center gap-2 transition-all cursor-pointer ${
                 scanMode === 'camera'
-                  ? 'bg-[#00A651] text-white shadow-xs'
+                  ? 'bg-[#072417] text-white shadow-xs border border-[#00A651]/40'
                   : 'text-stone-600 hover:text-stone-900'
               }`}
             >
-              <Camera className="w-3.5 h-3.5" />
+              <Camera className="w-3.5 h-3.5 text-[#00A651]" />
               <span>Kamera Langsung</span>
             </button>
 
@@ -375,12 +454,12 @@ export const FrontDeskScannerModal: React.FC<FrontDeskScannerModalProps> = ({
               onClick={() => setScanMode('upload')}
               className={`px-3.5 py-1.5 rounded-lg text-xs font-bold flex items-center gap-2 transition-all cursor-pointer ${
                 scanMode === 'upload'
-                  ? 'bg-[#00A651] text-white shadow-xs'
+                  ? 'bg-[#072417] text-white shadow-xs border border-[#00A651]/40'
                   : 'text-stone-600 hover:text-stone-900'
               }`}
             >
-              <Upload className="w-3.5 h-3.5" />
-              <span>Unggah Foto Kartu</span>
+              <Upload className="w-3.5 h-3.5 text-[#00A651]" />
+              <span>Unggah Gambar Kartu</span>
             </button>
 
             <button
@@ -388,36 +467,25 @@ export const FrontDeskScannerModal: React.FC<FrontDeskScannerModalProps> = ({
               onClick={() => setScanMode('manual')}
               className={`px-3.5 py-1.5 rounded-lg text-xs font-bold flex items-center gap-2 transition-all cursor-pointer ${
                 scanMode === 'manual'
-                  ? 'bg-[#00A651] text-white shadow-xs'
+                  ? 'bg-[#072417] text-white shadow-xs border border-[#00A651]/40'
                   : 'text-stone-600 hover:text-stone-900'
               }`}
             >
-              <Search className="w-3.5 h-3.5" />
+              <Search className="w-3.5 h-3.5 text-[#00A651]" />
               <span>Cari Manual</span>
             </button>
           </div>
 
-          {/* Sound Toggle & Camera Switch */}
-          <div className="flex items-center gap-2">
-            <button
-              type="button"
-              onClick={() => setSoundEnabled(!soundEnabled)}
-              className={`p-2 rounded-xl border text-xs flex items-center gap-1 cursor-pointer transition-colors ${
-                soundEnabled
-                  ? 'bg-emerald-50 border-emerald-200 text-emerald-800'
-                  : 'bg-stone-100 border-stone-200 text-stone-500'
-              }`}
-              title={soundEnabled ? 'Suara Beep Aktif' : 'Suara Beep Nonaktif'}
-            >
-              {soundEnabled ? <Volume2 className="w-4 h-4 text-[#00A651]" /> : <VolumeX className="w-4 h-4" />}
-            </button>
+          <div className="text-[11px] text-stone-500 font-mono hidden sm:flex items-center gap-1.5">
+            <span className="w-2 h-2 rounded-full bg-[#00A651] animate-pulse" />
+            <span>Resort Scanner Ready</span>
           </div>
         </div>
 
-        {/* ================= VIEW 1: LIVE CAMERA SCANNER ================= */}
+        {/* ================= VIEW 1: LIVE CAMERA SCANNER WITH FLASH ANIMATION ================= */}
         {scanMode === 'camera' && (
           <div className="space-y-3">
-            <div className="relative w-full aspect-video sm:aspect-[16/9] max-h-[320px] bg-stone-950 rounded-2xl overflow-hidden border-2 border-[#00A651]/40 flex items-center justify-center shadow-inner">
+            <div className="relative w-full aspect-video sm:aspect-[16/9] max-h-[300px] bg-[#04160E] rounded-2xl overflow-hidden border-2 border-[#00A651]/50 flex items-center justify-center shadow-lg">
               {/* Video Element */}
               <video
                 ref={videoRef}
@@ -427,23 +495,42 @@ export const FrontDeskScannerModal: React.FC<FrontDeskScannerModalProps> = ({
                 className="w-full h-full object-cover"
               />
 
+              {/* SUCCESS CAMERA FLASH ANIMATION OVERLAY */}
+              {isFlashing && (
+                <div className="absolute inset-0 bg-white/90 backdrop-blur-xs z-30 flex flex-col items-center justify-center transition-all duration-700 pointer-events-none animate-in fade-in">
+                  <div className="p-4 bg-[#072417] text-white rounded-2xl shadow-2xl border-2 border-[#00A651] flex items-center gap-3 animate-in zoom-in-75 duration-200">
+                    <div className="w-10 h-10 rounded-xl bg-[#00A651] text-white flex items-center justify-center shadow-md">
+                      <CheckCircle2 className="w-6 h-6 animate-pulse" />
+                    </div>
+                    <div>
+                      <div className="text-[10px] text-[#C5A869] font-bold uppercase tracking-widest font-mono">
+                        Kartu Berhasil Terpindai!
+                      </div>
+                      <div className="text-sm font-bold text-white font-serif">
+                        {selectedMember?.fullName}
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              )}
+
               {/* Active Scanner Viewport Overlay */}
-              {cameraState === 'active' && (
+              {cameraState === 'active' && !isFlashing && (
                 <div className="absolute inset-0 pointer-events-none flex flex-col items-center justify-center">
                   {/* Bounding Box Frame */}
-                  <div className="w-64 h-48 sm:w-72 sm:h-52 border-2 border-[#00A651] rounded-2xl relative shadow-[0_0_0_9999px_rgba(0,0,0,0.45)]">
-                    {/* Corner Reticles */}
-                    <div className="absolute top-0 left-0 w-6 h-6 border-t-4 border-l-4 border-amber-400 -mt-1 -ml-1 rounded-tl-lg" />
-                    <div className="absolute top-0 right-0 w-6 h-6 border-t-4 border-r-4 border-amber-400 -mt-1 -mr-1 rounded-tr-lg" />
-                    <div className="absolute bottom-0 left-0 w-6 h-6 border-b-4 border-l-4 border-amber-400 -mb-1 -ml-1 rounded-bl-lg" />
-                    <div className="absolute bottom-0 right-0 w-6 h-6 border-b-4 border-r-4 border-amber-400 -mb-1 -mr-1 rounded-br-lg" />
+                  <div className="w-60 h-44 sm:w-72 sm:h-52 border-2 border-[#00A651] rounded-2xl relative shadow-[0_0_0_9999px_rgba(4,22,14,0.55)]">
+                    {/* Corner Reticles (Champagne Gold Accents) */}
+                    <div className="absolute top-0 left-0 w-6 h-6 border-t-4 border-l-4 border-[#C5A869] -mt-1 -ml-1 rounded-tl-lg" />
+                    <div className="absolute top-0 right-0 w-6 h-6 border-t-4 border-r-4 border-[#C5A869] -mt-1 -mr-1 rounded-tr-lg" />
+                    <div className="absolute bottom-0 left-0 w-6 h-6 border-b-4 border-l-4 border-[#C5A869] -mb-1 -ml-1 rounded-bl-lg" />
+                    <div className="absolute bottom-0 right-0 w-6 h-6 border-b-4 border-r-4 border-[#C5A869] -mb-1 -mr-1 rounded-br-lg" />
 
                     {/* Animated Laser Scanning Line */}
-                    <div className="absolute left-2 right-2 h-0.5 bg-gradient-to-r from-transparent via-[#00A651] to-transparent shadow-[0_0_12px_#00A651] animate-bounce duration-1000 top-1/2 -translate-y-1/2" />
+                    <div className="absolute left-2 right-2 h-0.5 bg-gradient-to-r from-transparent via-[#00A651] to-transparent shadow-[0_0_14px_#00A651] animate-bounce duration-1000 top-1/2 -translate-y-1/2" />
 
                     <div className="absolute -bottom-7 left-0 right-0 text-center">
-                      <span className="text-[10px] uppercase tracking-wider font-bold bg-[#072417]/90 text-emerald-300 px-3 py-1 rounded-full border border-emerald-500/30">
-                        Arahkan Barcode / QR Kartu ke Sini
+                      <span className="text-[10px] uppercase tracking-wider font-bold bg-[#072417]/90 text-emerald-300 px-3 py-1 rounded-full border border-[#00A651]/40 shadow-xs">
+                        Posisikan QR atau Barcode Tamu di Kotak
                       </span>
                     </div>
                   </div>
@@ -452,17 +539,17 @@ export const FrontDeskScannerModal: React.FC<FrontDeskScannerModalProps> = ({
 
               {/* Camera State Overlays */}
               {cameraState === 'requesting' && (
-                <div className="absolute inset-0 bg-stone-900/90 text-white flex flex-col items-center justify-center gap-3 p-6 text-center">
+                <div className="absolute inset-0 bg-[#072417]/95 text-white flex flex-col items-center justify-center gap-3 p-6 text-center">
                   <RefreshCw className="w-8 h-8 text-[#00A651] animate-spin" />
                   <div className="font-bold text-sm">Menghubungkan ke Kamera...</div>
-                  <p className="text-xs text-stone-400 max-w-xs">
-                    Harap izinkan akses kamera pada prompt browser untuk mulai memindai.
+                  <p className="text-xs text-emerald-200/80 max-w-xs">
+                    Harap izinkan akses kamera pada prompt browser Anda untuk mulai memindai.
                   </p>
                 </div>
               )}
 
               {cameraState === 'denied' && (
-                <div className="absolute inset-0 bg-stone-900/95 text-white flex flex-col items-center justify-center gap-3 p-6 text-center">
+                <div className="absolute inset-0 bg-[#072417]/95 text-white flex flex-col items-center justify-center gap-3 p-6 text-center">
                   <div className="w-12 h-12 rounded-full bg-rose-500/20 text-rose-400 flex items-center justify-center">
                     <CameraOff className="w-6 h-6" />
                   </div>
@@ -482,11 +569,11 @@ export const FrontDeskScannerModal: React.FC<FrontDeskScannerModalProps> = ({
               )}
 
               {(cameraState === 'error' || cameraState === 'unsupported') && (
-                <div className="absolute inset-0 bg-stone-900/95 text-white flex flex-col items-center justify-center gap-3 p-6 text-center">
-                  <div className="w-12 h-12 rounded-full bg-amber-500/20 text-amber-400 flex items-center justify-center">
+                <div className="absolute inset-0 bg-[#072417]/95 text-white flex flex-col items-center justify-center gap-3 p-6 text-center">
+                  <div className="w-12 h-12 rounded-full bg-[#C5A869]/20 text-[#C5A869] flex items-center justify-center">
                     <AlertCircle className="w-6 h-6" />
                   </div>
-                  <div className="font-bold text-sm text-amber-300">Kamera Tidak Tersedia</div>
+                  <div className="font-bold text-sm text-amber-300">Kamera Tidak Terdeteksi</div>
                   <p className="text-xs text-stone-300 max-w-sm">
                     {cameraErrorMessage || 'Kamera tidak dapat diakses pada perangkat ini. Anda dapat menggunakan opsi Unggah Foto Kartu atau Pencarian Manual.'}
                   </p>
@@ -494,7 +581,7 @@ export const FrontDeskScannerModal: React.FC<FrontDeskScannerModalProps> = ({
                     <button
                       type="button"
                       onClick={() => setScanMode('upload')}
-                      className="px-3.5 py-2 bg-[#00A651] text-white rounded-xl text-xs font-bold flex items-center gap-1.5 cursor-pointer"
+                      className="px-3.5 py-2 bg-[#00A651] hover:bg-[#008f45] text-white rounded-xl text-xs font-bold flex items-center gap-1.5 cursor-pointer"
                     >
                       <Upload className="w-3.5 h-3.5" />
                       <span>Unggah Foto Kartu</span>
@@ -502,7 +589,7 @@ export const FrontDeskScannerModal: React.FC<FrontDeskScannerModalProps> = ({
                     <button
                       type="button"
                       onClick={() => setScanMode('manual')}
-                      className="px-3.5 py-2 bg-stone-700 hover:bg-stone-600 text-white rounded-xl text-xs font-bold flex items-center gap-1.5 cursor-pointer"
+                      className="px-3.5 py-2 bg-stone-800 hover:bg-stone-700 text-white rounded-xl text-xs font-bold flex items-center gap-1.5 cursor-pointer"
                     >
                       <Search className="w-3.5 h-3.5" />
                       <span>Input Manual</span>
@@ -527,7 +614,7 @@ export const FrontDeskScannerModal: React.FC<FrontDeskScannerModalProps> = ({
                       onChange={(e) => {
                         setSelectedDeviceId(e.target.value);
                       }}
-                      className="text-xs px-2.5 py-1 bg-stone-100 border border-stone-300 rounded-lg text-stone-800 font-medium"
+                      className="text-xs px-2.5 py-1 bg-[#F4F1EA] border border-[#E5DFD3] rounded-lg text-stone-800 font-medium"
                     >
                       <option value="">Pilih Kamera</option>
                       {availableDevices.map((dev, idx) => (
@@ -541,17 +628,17 @@ export const FrontDeskScannerModal: React.FC<FrontDeskScannerModalProps> = ({
                   <button
                     type="button"
                     onClick={toggleFacingMode}
-                    className="px-2.5 py-1 bg-stone-100 hover:bg-stone-200 text-stone-800 rounded-lg text-xs font-semibold flex items-center gap-1.5 cursor-pointer border border-stone-200"
+                    className="px-2.5 py-1 bg-[#F4F1EA] hover:bg-[#EAE5D9] text-stone-800 rounded-lg text-xs font-semibold flex items-center gap-1.5 cursor-pointer border border-[#E5DFD3]"
                     title="Ganti Kamera Depan / Belakang"
                   >
                     <SwitchCamera className="w-3.5 h-3.5 text-[#00A651]" />
-                    <span>Ganti Kamera ({facingMode === 'environment' ? 'Belakang' : 'Depan'})</span>
+                    <span>Ganti ({facingMode === 'environment' ? 'Belakang' : 'Depan'})</span>
                   </button>
 
                   <button
                     type="button"
                     onClick={startCamera}
-                    className="p-1.5 bg-stone-100 hover:bg-stone-200 text-stone-700 rounded-lg border border-stone-200 cursor-pointer"
+                    className="p-1.5 bg-[#F4F1EA] hover:bg-[#EAE5D9] text-stone-700 rounded-lg border border-[#E5DFD3] cursor-pointer"
                     title="Muat Ulang Kamera"
                   >
                     <RefreshCw className="w-3.5 h-3.5" />
@@ -564,14 +651,14 @@ export const FrontDeskScannerModal: React.FC<FrontDeskScannerModalProps> = ({
 
         {/* ================= VIEW 2: UPLOAD IMAGE SCANNER ================= */}
         {scanMode === 'upload' && (
-          <div className="p-6 border-2 border-dashed border-stone-300 rounded-2xl bg-stone-50 text-center space-y-3">
+          <div className="p-6 border-2 border-dashed border-[#00A651]/40 rounded-2xl bg-[#F8F6F0] text-center space-y-3">
             <div className="w-12 h-12 rounded-full bg-emerald-100 text-[#00A651] flex items-center justify-center mx-auto">
               <Upload className="w-6 h-6" />
             </div>
             <div>
-              <h4 className="text-sm font-bold text-stone-800">Unggah Foto atau Tangkapan Layar Kartu</h4>
-              <p className="text-xs text-stone-500 mt-0.5">
-                Pilih foto kartu fisik atau QR kartu digital yang tersimpan di perangkat Anda.
+              <h4 className="text-sm font-bold text-stone-900 font-serif">Unggah Foto Kartu Member atau QR</h4>
+              <p className="text-xs text-stone-500 mt-0.5 max-w-sm mx-auto">
+                Pilih berkas foto kartu fisik atau tangkapan layar kartu digital tamu dari perangkat Anda.
               </p>
             </div>
             <label className="inline-flex items-center gap-2 px-4 py-2.5 bg-[#00A651] hover:bg-[#008f45] text-white rounded-xl text-xs font-bold cursor-pointer shadow-md transition-all">
@@ -597,7 +684,7 @@ export const FrontDeskScannerModal: React.FC<FrontDeskScannerModalProps> = ({
                 value={searchQuery}
                 onChange={(e) => setSearchQuery(e.target.value)}
                 placeholder="Ketik Nomor Member (LGH-...), Nama Tamu, atau No. Telepon..."
-                className="w-full pl-10 pr-4 py-2.5 bg-stone-50 border border-stone-200 rounded-xl text-xs sm:text-sm focus:outline-hidden focus:ring-2 focus:ring-[#00A651]/30 focus:border-[#00A651]"
+                className="w-full pl-10 pr-4 py-2.5 bg-[#F8F6F0] border border-[#E5DFD3] rounded-xl text-xs sm:text-sm focus:outline-hidden focus:ring-2 focus:ring-[#00A651]/30 focus:border-[#00A651]"
                 autoFocus
               />
             </div>
@@ -616,8 +703,8 @@ export const FrontDeskScannerModal: React.FC<FrontDeskScannerModalProps> = ({
                   }}
                   className={`px-2.5 py-1 rounded-lg shrink-0 transition-colors cursor-pointer ${
                     selectedMember?.id === m.id
-                      ? 'bg-[#072417] text-amber-300 font-semibold shadow-xs'
-                      : 'bg-stone-100 hover:bg-stone-200 text-stone-700'
+                      ? 'bg-[#072417] text-[#C5A869] font-semibold shadow-xs border border-[#00A651]/40'
+                      : 'bg-[#F4F1EA] hover:bg-[#EAE5D9] text-stone-700 border border-[#E5DFD3]'
                   }`}
                 >
                   {m.fullName.split(' ')[0]} ({m.membershipNumber})
@@ -633,7 +720,7 @@ export const FrontDeskScannerModal: React.FC<FrontDeskScannerModalProps> = ({
             <div className="flex items-start gap-2.5">
               <AlertCircle className="w-4 h-4 text-amber-600 shrink-0 mt-0.5" />
               <div>
-                <div className="font-bold">Kode Belum Terdaftar</div>
+                <div className="font-bold">Kode Belum Terdaftar di Sistem</div>
                 <div className="text-stone-600 mt-0.5">{scanError}</div>
               </div>
             </div>
@@ -644,7 +731,7 @@ export const FrontDeskScannerModal: React.FC<FrontDeskScannerModalProps> = ({
                   onClose();
                   onOpenAddMember();
                 }}
-                className="px-3 py-1.5 bg-[#00A651] text-white rounded-lg text-xs font-bold shrink-0 hover:bg-[#008f45] cursor-pointer"
+                className="px-3 py-1.5 bg-[#00A651] text-white rounded-lg text-xs font-bold shrink-0 hover:bg-[#008f45] cursor-pointer shadow-xs"
               >
                 + Daftarkan Member
               </button>
@@ -652,12 +739,15 @@ export const FrontDeskScannerModal: React.FC<FrontDeskScannerModalProps> = ({
           </div>
         )}
 
-        {/* ================= VERIFICATION RESULT CARD ================= */}
+        {/* ================= VERIFICATION RESULT CARD (OFFICIAL BRAND THEME) ================= */}
         {selectedMember ? (
-          <div className="bg-stone-50/90 rounded-2xl border border-stone-200 p-5 space-y-4 shadow-xs">
-            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 border-b border-stone-200 pb-4">
+          <div className="bg-[#FAF9F5] rounded-2xl border border-[#E5DFD3] p-4 sm:p-5 space-y-4 shadow-xs relative overflow-hidden">
+            {/* Top Accent Stripe */}
+            <div className="h-1 w-full bg-gradient-to-r from-[#00A651] via-[#C5A869] to-[#072417] absolute top-0 left-0 right-0" />
+
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pt-1 border-b border-[#E5DFD3] pb-3.5">
               <div className="flex items-center gap-3">
-                <div className="w-12 h-12 rounded-xl bg-[#072417] text-amber-300 font-serif font-bold text-lg flex items-center justify-center shadow-xs border border-[#00A651]/30">
+                <div className="w-12 h-12 rounded-xl bg-gradient-to-br from-[#072417] to-[#0A3320] text-[#C5A869] font-serif font-bold text-lg flex items-center justify-center shadow-xs border border-[#00A651]/40 shrink-0">
                   {selectedMember.fullName.charAt(0)}
                 </div>
                 <div>
@@ -666,7 +756,7 @@ export const FrontDeskScannerModal: React.FC<FrontDeskScannerModalProps> = ({
                       {selectedMember.fullName}
                     </h4>
                     <span
-                      className={`text-[10px] font-bold px-2 py-0.5 rounded-full uppercase ${
+                      className={`text-[10px] font-bold px-2.5 py-0.5 rounded-full uppercase ${
                         selectedMember.status === 'ACTIVE'
                           ? 'bg-emerald-100 text-emerald-800 border border-emerald-300'
                           : 'bg-rose-100 text-rose-800'
@@ -676,7 +766,9 @@ export const FrontDeskScannerModal: React.FC<FrontDeskScannerModalProps> = ({
                     </span>
                   </div>
                   <div className="text-xs font-mono text-stone-500 mt-0.5 flex items-center gap-2">
-                    <span className="text-emerald-800 font-bold">{selectedMember.membershipNumber}</span>
+                    <span className="text-[#072417] font-bold bg-[#00A651]/15 px-1.5 py-0.5 rounded text-emerald-900">
+                      {selectedMember.membershipNumber}
+                    </span>
                     <span>&bull;</span>
                     <span>{selectedMember.phone}</span>
                   </div>
@@ -698,18 +790,18 @@ export const FrontDeskScannerModal: React.FC<FrontDeskScannerModalProps> = ({
             </div>
 
             {/* Quick Metrics */}
-            <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
-              <div className="p-3 bg-white rounded-xl border border-stone-200">
-                <div className="text-[10px] text-stone-400 font-medium uppercase">
+            <div className="grid grid-cols-2 sm:grid-cols-4 gap-2.5">
+              <div className="p-3 bg-white rounded-xl border border-[#E5DFD3]">
+                <div className="text-[10px] text-stone-400 font-medium uppercase tracking-wider">
                   Poin Tersedia
                 </div>
-                <div className="text-sm font-bold text-amber-700 font-mono mt-0.5">
+                <div className="text-sm font-bold text-[#00A651] font-mono mt-0.5">
                   {selectedMember.availablePoints.toLocaleString('id-ID')} pts
                 </div>
               </div>
 
-              <div className="p-3 bg-white rounded-xl border border-stone-200">
-                <div className="text-[10px] text-stone-400 font-medium uppercase">
+              <div className="p-3 bg-white rounded-xl border border-[#E5DFD3]">
+                <div className="text-[10px] text-stone-400 font-medium uppercase tracking-wider">
                   Total Spending
                 </div>
                 <div className="text-sm font-bold text-stone-900 font-mono mt-0.5">
@@ -717,8 +809,8 @@ export const FrontDeskScannerModal: React.FC<FrontDeskScannerModalProps> = ({
                 </div>
               </div>
 
-              <div className="p-3 bg-white rounded-xl border border-stone-200">
-                <div className="text-[10px] text-stone-400 font-medium uppercase">
+              <div className="p-3 bg-white rounded-xl border border-[#E5DFD3]">
+                <div className="text-[10px] text-stone-400 font-medium uppercase tracking-wider">
                   Total Kunjungan
                 </div>
                 <div className="text-sm font-bold text-stone-900 font-mono mt-0.5">
@@ -726,8 +818,8 @@ export const FrontDeskScannerModal: React.FC<FrontDeskScannerModalProps> = ({
                 </div>
               </div>
 
-              <div className="p-3 bg-white rounded-xl border border-stone-200">
-                <div className="text-[10px] text-stone-400 font-medium uppercase">
+              <div className="p-3 bg-white rounded-xl border border-[#E5DFD3]">
+                <div className="text-[10px] text-stone-400 font-medium uppercase tracking-wider">
                   Masa Berlaku
                 </div>
                 <div className="text-[11px] font-semibold text-stone-700 font-mono mt-0.5">
@@ -737,7 +829,7 @@ export const FrontDeskScannerModal: React.FC<FrontDeskScannerModalProps> = ({
             </div>
 
             {/* Active Tier Benefits preview for Front Office Staff */}
-            <div className="bg-white p-3.5 rounded-xl border border-stone-200">
+            <div className="bg-white p-3.5 rounded-xl border border-[#E5DFD3]">
               <div className="text-[11px] font-semibold text-stone-800 uppercase tracking-wider mb-2 flex items-center gap-1.5">
                 <CheckCircle className="w-3.5 h-3.5 text-[#00A651]" />
                 Benefit Aktif Tamu:
@@ -753,7 +845,7 @@ export const FrontDeskScannerModal: React.FC<FrontDeskScannerModalProps> = ({
             </div>
 
             {/* Staff Actions */}
-            <div className="grid grid-cols-2 sm:grid-cols-4 gap-2.5 pt-2">
+            <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 pt-1">
               <button
                 type="button"
                 onClick={() => {
@@ -804,7 +896,7 @@ export const FrontDeskScannerModal: React.FC<FrontDeskScannerModalProps> = ({
             </div>
           </div>
         ) : (
-          <div className="p-8 text-center bg-stone-50 rounded-2xl border border-stone-200 text-stone-500 text-xs">
+          <div className="p-8 text-center bg-[#F8F6F0] rounded-2xl border border-[#E5DFD3] text-stone-500 text-xs">
             Arahkan kamera ke kartu member atau cari member di atas untuk verifikasi kartu
           </div>
         )}
