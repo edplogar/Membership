@@ -5,6 +5,10 @@ import { useToast } from '../../context/ToastContext';
 import { LombokGardenLogo } from '../common/LombokGardenLogo';
 import { sendFirebasePasswordResetEmail } from '../../services/firebase';
 import {
+  MEMBER_CUSTOM_DOMAIN,
+  isMemberSubdomain,
+} from '../../services/domainService';
+import {
   Mail,
   Lock,
   Eye,

@@ -40,13 +40,14 @@ import { EmailSystemHub } from './components/superadmin/EmailSystemHub';
 
 // Modals & Auth
 import { GlobalSearchModal } from './components/common/GlobalSearchModal';
+import { SubdomainSyncModal } from './components/common/SubdomainSyncModal';
 import { AuthModal } from './components/auth/AuthModal';
 import { LoginPage } from './components/auth/LoginPage';
 import { LombokGardenLogo } from './components/common/LombokGardenLogo';
 
 function MainApp() {
   const { currentUser, currentMember, userRole } = useAuth();
-  const { tiers, members } = useApp();
+  const { tiers, members, isSyncModalOpen, closeSyncModal } = useApp();
 
   // Active navigation tab
   const [activeTab, setActiveTab] = useState<string>(() =>
@@ -333,6 +334,12 @@ function MainApp() {
         isOpen={isSearchOpen}
         onClose={() => setIsSearchOpen(false)}
         onSelectMember={handleViewProfileMember}
+      />
+
+      {/* 6b. Subdomain & Cloud Database Sync Modal */}
+      <SubdomainSyncModal
+        isOpen={isSyncModalOpen}
+        onClose={closeSyncModal}
       />
 
       {/* 7. Public Auth Modal (Login / Register / Forgot) */}

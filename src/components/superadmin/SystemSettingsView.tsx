@@ -1,9 +1,12 @@
 import React, { useState } from 'react';
 import { useApp } from '../../context/AppContext';
+import { MEMBER_CUSTOM_DOMAIN, FIRESTORE_DATABASE_ID } from '../../services/domainService';
 import { Save, Building2, Shield, Globe, Cpu, Bell, Check } from 'lucide-react';
+import { useToast } from '../../context/ToastContext';
 
 export const SystemSettingsView: React.FC = () => {
   const { systemSettings, updateSystemSettings, integrations } = useApp();
+  const { showToast } = useToast();
   const [form, setForm] = useState({ ...systemSettings });
 
   const handleSubmit = (e: React.FormEvent) => {
@@ -34,6 +37,55 @@ export const SystemSettingsView: React.FC = () => {
       </div>
 
       <form onSubmit={handleSubmit} className="space-y-6">
+        {/* Section 0: Subdomain Custom & Centralized Sync Notification Reference */}
+        <div className="bg-gradient-to-br from-[#072417] to-[#0D3823] rounded-2xl border border-emerald-900 shadow-sm p-6 text-white space-y-4">
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pb-3 border-b border-emerald-800/80">
+            <div className="flex items-center gap-2.5">
+              <div className="w-8 h-8 rounded-xl bg-[#00A651]/20 border border-[#00A651]/40 flex items-center justify-center text-[#4ADE80]">
+                <Globe className="w-4 h-4" />
+              </div>
+              <div>
+                <h3 className="font-bold text-sm text-white uppercase tracking-wider flex items-center gap-2">
+                  <span>Subdomain Custom Front End Tamu</span>
+                  <span className="w-2 h-2 rounded-full bg-[#00A651]" />
+                </h3>
+                <p className="text-[11px] text-emerald-200/70 font-mono">
+                  {MEMBER_CUSTOM_DOMAIN}
+                </p>
+              </div>
+            </div>
+
+            <div className="text-right">
+              <span className="px-3 py-1 rounded-full text-xs font-semibold bg-emerald-950/80 text-emerald-300 border border-emerald-800/80 inline-flex items-center gap-1.5">
+                <Check className="w-3.5 h-3.5 text-emerald-400" />
+                <span>Kendali & Notifikasi Sync: Menu Control Center</span>
+              </span>
+            </div>
+          </div>
+
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 text-xs">
+            <div className="p-3 rounded-xl bg-black/20 border border-emerald-900/60 space-y-1">
+              <span className="text-emerald-300/70 text-[11px] block">Alamat Subdomain Custom</span>
+              <strong className="text-white font-mono text-xs">{MEMBER_CUSTOM_DOMAIN}</strong>
+              <span className="text-[10px] text-emerald-400 block">Status: Terarah ke Front End</span>
+            </div>
+
+            <div className="p-3 rounded-xl bg-black/20 border border-emerald-900/60 space-y-1">
+              <span className="text-emerald-300/70 text-[11px] block">ID Database Firestore</span>
+              <strong className="text-white font-mono text-[11px] truncate block" title={FIRESTORE_DATABASE_ID}>
+                {FIRESTORE_DATABASE_ID}
+              </strong>
+              <span className="text-[10px] text-emerald-400 block">Status: Terhubung Cloud</span>
+            </div>
+
+            <div className="p-3 rounded-xl bg-black/20 border border-emerald-900/60 space-y-1">
+              <span className="text-emerald-300/70 text-[11px] block">Pusat Notifikasi & Sinkronisasi</span>
+              <strong className="text-white text-xs block">Menu "Control Center"</strong>
+              <span className="text-[10px] text-emerald-300/80 block">Notifikasi & aksi sync aktif khusus di menu Control Center</span>
+            </div>
+          </div>
+        </div>
+
         {/* Section 1: Hotel Property Identity */}
         <div className="bg-white rounded-2xl border border-stone-200 shadow-xs p-6 space-y-4">
           <div className="flex items-center gap-2 pb-3 border-b border-stone-100">

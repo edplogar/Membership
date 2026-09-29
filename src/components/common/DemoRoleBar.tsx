@@ -26,7 +26,7 @@ export const DemoRoleBar: React.FC<DemoRoleBarProps> = ({ onOpenScanner }) => {
 
   return (
     <div className="bg-[#051a10] border-b border-[#0e3a24] text-emerald-100 text-xs px-4 py-2 flex flex-wrap items-center justify-between gap-3 sticky top-0 z-40 shadow-xs">
-      <div className="flex items-center gap-2.5">
+      <div className="flex items-center gap-2.5 flex-wrap">
         <span className="font-serif-luxury text-[#00A651] font-bold tracking-wider text-[11px] uppercase flex items-center gap-1.5">
           <Sparkles className="w-3.5 h-3.5 text-[#00A651]" />
           Sesi Terotentikasi

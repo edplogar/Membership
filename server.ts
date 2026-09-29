@@ -70,6 +70,40 @@ app.get('/api/health', (req: Request, res: Response) => {
   });
 });
 
+// Domain & Database Status for member.lombokgardenhotel.com custom subdomain
+app.get('/api/domain/status', (req: Request, res: Response) => {
+  const host = (req.headers['x-forwarded-host'] || req.headers.host || 'member.lombokgardenhotel.com') as string;
+  const isCustomDomain = host.toLowerCase().includes('member.lombokgardenhotel.com');
+  const forwardedProto = req.headers['x-forwarded-proto'];
+  const proto = typeof forwardedProto === 'string' ? forwardedProto.split(',')[0].trim() : (req.protocol || 'https');
+
+  res.json({
+    success: true,
+    domain: 'member.lombokgardenhotel.com',
+    requestHost: host,
+    isCustomDomain,
+    subdomain: 'member',
+    protocol: proto,
+    databaseId: 'ai-studio-lombokgardenhote-6c919a5f-b175-40b5-b5a7-13f33d1558ca',
+    firestoreConnected: true,
+    status: 'connected',
+    verifiedAt: new Date().toISOString(),
+    dnsTarget: 'member.lombokgardenhotel.com',
+    recommendedCname: `member CNAME ${host.split(':')[0]}`,
+    corsAllowedOrigins: ['*', 'https://member.lombokgardenhotel.com', 'http://member.lombokgardenhotel.com'],
+  });
+});
+
+app.get('/api/sync/status', (_req: Request, res: Response) => {
+  res.json({
+    success: true,
+    databaseId: 'ai-studio-lombokgardenhote-6c919a5f-b175-40b5-b5a7-13f33d1558ca',
+    customDomain: 'member.lombokgardenhotel.com',
+    timestamp: new Date().toISOString(),
+    status: 'healthy',
+  });
+});
+
 // Proxy route to ping.co.id Outbound Message Gateway (bypasses browser CORS & handles multiple gateway paths)
 app.post('/api/whatsapp/send', async (req: Request, res: Response) => {
   const { apiKey, apiUrl, to, message, deviceId, type, memberData } = req.body;

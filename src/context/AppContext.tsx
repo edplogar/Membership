@@ -88,6 +88,15 @@ import {
   deleteDoc,
   onSnapshot,
 } from 'firebase/firestore';
+import {
+  MEMBER_CUSTOM_DOMAIN,
+  isMemberSubdomain,
+  setSimulateMemberSubdomain,
+} from '../services/domainService';
+import {
+  seedFirestoreIfEmpty,
+  pushAllToFirestore,
+} from '../services/dbSyncService';
 import { useAuth } from './AuthContext';
 import { useToast } from './ToastContext';
 
@@ -115,6 +124,14 @@ interface AppContextValue {
   whatsappLogs: WhatsAppMessageLog[];
   emailConfig: EmailSystemConfig;
   emailLogs: EmailMessageLog[];
+
+  // Subdomain & Database Cloud Sync Controls
+  isSyncModalOpen: boolean;
+  openSyncModal: () => void;
+  closeSyncModal: () => void;
+  isMemberDomain: boolean;
+  customDomain: string;
+  forceSyncToCloud: () => Promise<boolean>;
 
   // Actions
   addMember: (data: Omit<Member, 'id' | 'membershipNumber' | 'totalVisits' | 'totalTransactions' | 'totalSpending' | 'totalPointsEarned' | 'availablePoints' | 'redeemedPoints'>) => Member;
@@ -203,9 +220,26 @@ export function AppProvider({ children }: { children: ReactNode }) {
   const [emailConfig, setEmailConfig] = useState<EmailSystemConfig>(() => loadFromStorage('emailConfig', INITIAL_EMAIL_CONFIG));
   const [emailLogs, setEmailLogs] = useState<EmailMessageLog[]>(() => loadFromStorage('emailLogs', INITIAL_EMAIL_LOGS));
 
-  // Test Firestore Connection on Boot
+  // Subdomain & Cloud Sync State
+  const [isSyncModalOpen, setIsSyncModalOpen] = useState(false);
+  const [isMemberDomain, setIsMemberDomain] = useState<boolean>(() => isMemberSubdomain());
+
+  useEffect(() => {
+    const handleDomainChange = () => {
+      setIsMemberDomain(isMemberSubdomain());
+    };
+    window.addEventListener('domain_mode_changed', handleDomainChange);
+    return () => window.removeEventListener('domain_mode_changed', handleDomainChange);
+  }, []);
+
+  // Test Firestore Connection and Seed Database if Empty on Boot
   useEffect(() => {
     testFirestoreConnection();
+    seedFirestoreIfEmpty().then((res) => {
+      if (res.seeded) {
+        console.log('[FIRESTORE INIT] Initial hotel collections seeded to cloud.');
+      }
+    }).catch(() => {});
   }, []);
 
   // Sync to localStorage
@@ -232,7 +266,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
   useEffect(() => saveToStorage('emailConfig', emailConfig), [emailConfig]);
   useEffect(() => saveToStorage('emailLogs', emailLogs), [emailLogs]);
 
-  // Firestore Real-time Listeners (multi-account synchronization)
+  // Firestore Real-time Listeners (multi-device & subdomain cloud synchronization)
   useEffect(() => {
     try {
       const unsubMembers = onSnapshot(
@@ -295,6 +329,66 @@ export function AppProvider({ children }: { children: ReactNode }) {
         (error) => handleFirestoreError(error, OperationType.GET, 'membership_tiers')
       );
 
+      const unsubBenefits = onSnapshot(
+        collection(db, 'membership_benefits'),
+        (snapshot) => {
+          if (!snapshot.empty) {
+            const list: MembershipBenefit[] = [];
+            snapshot.forEach((docSnap) => list.push(docSnap.data() as MembershipBenefit));
+            setBenefits(list);
+          }
+        },
+        (error) => handleFirestoreError(error, OperationType.GET, 'membership_benefits')
+      );
+
+      const unsubRules = onSnapshot(
+        collection(db, 'membership_rules'),
+        (snapshot) => {
+          if (!snapshot.empty) {
+            const list: MembershipRule[] = [];
+            snapshot.forEach((docSnap) => list.push(docSnap.data() as MembershipRule));
+            setRules(list);
+          }
+        },
+        (error) => handleFirestoreError(error, OperationType.GET, 'membership_rules')
+      );
+
+      const unsubRewards = onSnapshot(
+        collection(db, 'rewards'),
+        (snapshot) => {
+          if (!snapshot.empty) {
+            const list: Reward[] = [];
+            snapshot.forEach((docSnap) => list.push(docSnap.data() as Reward));
+            setRewards(list);
+          }
+        },
+        (error) => handleFirestoreError(error, OperationType.GET, 'rewards')
+      );
+
+      const unsubVouchers = onSnapshot(
+        collection(db, 'vouchers'),
+        (snapshot) => {
+          if (!snapshot.empty) {
+            const list: Voucher[] = [];
+            snapshot.forEach((docSnap) => list.push(docSnap.data() as Voucher));
+            setVouchers(list);
+          }
+        },
+        (error) => handleFirestoreError(error, OperationType.GET, 'vouchers')
+      );
+
+      const unsubPromos = onSnapshot(
+        collection(db, 'promotions'),
+        (snapshot) => {
+          if (!snapshot.empty) {
+            const list: PromotionCampaign[] = [];
+            snapshot.forEach((docSnap) => list.push(docSnap.data() as PromotionCampaign));
+            setPromotions(list);
+          }
+        },
+        (error) => handleFirestoreError(error, OperationType.GET, 'promotions')
+      );
+
       const unsubWALogs = onSnapshot(
         collection(db, 'whatsapp_logs'),
         (snapshot) => {
@@ -339,16 +433,45 @@ export function AppProvider({ children }: { children: ReactNode }) {
         (error) => handleFirestoreError(error, OperationType.GET, 'email_logs')
       );
 
+      const unsubSettings = onSnapshot(
+        doc(db, 'system_settings', 'hotel_settings'),
+        (docSnap) => {
+          if (docSnap.exists()) {
+            setSystemSettings(docSnap.data() as HotelSystemSettings);
+          }
+        },
+        (error) => handleFirestoreError(error, OperationType.GET, 'system_settings/hotel_settings')
+      );
+
+      const unsubUsers = onSnapshot(
+        collection(db, 'users'),
+        (snapshot) => {
+          if (!snapshot.empty) {
+            const list: User[] = [];
+            snapshot.forEach((docSnap) => list.push(docSnap.data() as User));
+            setUsers(list);
+          }
+        },
+        (error) => handleFirestoreError(error, OperationType.GET, 'users')
+      );
+
       return () => {
         unsubMembers();
         unsubStays();
         unsubTxs();
         unsubPointTxs();
         unsubTiers();
+        unsubBenefits();
+        unsubRules();
+        unsubRewards();
+        unsubVouchers();
+        unsubPromos();
         unsubWALogs();
         unsubWAPingConfig();
         unsubEmailConfig();
         unsubEmailLogs();
+        unsubSettings();
+        unsubUsers();
       };
     } catch {
       // Offline fallback
@@ -901,17 +1024,23 @@ export function AppProvider({ children }: { children: ReactNode }) {
     };
 
     setVoucherRedemptions((prev) => [newVoucherRedemption, ...prev]);
+    try {
+      setDoc(doc(db, 'voucher_redemptions', newVoucherRedemption.id), newVoucherRedemption).catch(() => {});
+    } catch {}
     showToast(`Voucher "${voucher.title}" berhasil diklaim! Kode: ${voucher.code}`, 'success');
     return { success: true, message: 'Voucher berhasil diklaim' };
   };
 
   // Use Voucher
   const useVoucher = (redemptionId: string) => {
-    setVoucherRedemptions((prev) =>
-      prev.map((r) =>
-        r.id === redemptionId ? { ...r, status: 'used', usedAt: new Date().toISOString() } : r
-      )
+    const updated = voucherRedemptions.map((r) =>
+      r.id === redemptionId ? { ...r, status: 'used' as const, usedAt: new Date().toISOString() } : r
     );
+    setVoucherRedemptions(updated);
+    try {
+      const item = updated.find((r) => r.id === redemptionId);
+      if (item) setDoc(doc(db, 'voucher_redemptions', redemptionId), item).catch(() => {});
+    } catch {}
     showToast('Voucher berhasil digunakan pada transaksi.', 'success');
   };
 
@@ -925,7 +1054,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
       setDoc(doc(db, 'membership_tiers', tier.id), tier).catch(() => {});
     } catch {}
     logAudit('SAVE_TIER', 'TIERS', tier.id, 'None', JSON.stringify(tier));
-    showToast(`Tier ${tier.name} berhasil disimpan.`, 'success');
+    showToast(`Tier ${tier.name} berhasil disimpan ke database.`, 'success');
   };
 
   const deleteTier = (id: string) => {
@@ -943,11 +1072,17 @@ export function AppProvider({ children }: { children: ReactNode }) {
       const exists = prev.some((b) => b.id === benefit.id);
       return exists ? prev.map((b) => (b.id === benefit.id ? benefit : b)) : [...prev, benefit];
     });
-    showToast(`Benefit "${benefit.name}" berhasil disimpan.`, 'success');
+    try {
+      setDoc(doc(db, 'membership_benefits', benefit.id), benefit).catch(() => {});
+    } catch {}
+    showToast(`Benefit "${benefit.name}" berhasil disimpan ke database.`, 'success');
   };
 
   const deleteBenefit = (id: string) => {
     setBenefits((prev) => prev.filter((b) => b.id !== id));
+    try {
+      deleteDoc(doc(db, 'membership_benefits', id)).catch(() => {});
+    } catch {}
     showToast('Benefit berhasil dihapus.', 'info');
   };
 
@@ -957,12 +1092,18 @@ export function AppProvider({ children }: { children: ReactNode }) {
       const exists = prev.some((r) => r.id === rule.id);
       return exists ? prev.map((r) => (r.id === rule.id ? rule : r)) : [...prev, rule];
     });
+    try {
+      setDoc(doc(db, 'membership_rules', rule.id), rule).catch(() => {});
+    } catch {}
     logAudit('SAVE_RULE', 'RULE_ENGINE', rule.id, 'None', JSON.stringify(rule));
     showToast(`Aturan evaluasi "${rule.name}" berhasil disimpan.`, 'success');
   };
 
   const deleteRule = (id: string) => {
     setRules((prev) => prev.filter((r) => r.id !== id));
+    try {
+      deleteDoc(doc(db, 'membership_rules', id)).catch(() => {});
+    } catch {}
     logAudit('DELETE_RULE', 'RULE_ENGINE', id, 'None', 'DELETED');
     showToast('Aturan berhasil dihapus.', 'info');
   };
@@ -973,11 +1114,17 @@ export function AppProvider({ children }: { children: ReactNode }) {
       const exists = prev.some((r) => r.id === reward.id);
       return exists ? prev.map((r) => (r.id === reward.id ? reward : r)) : [...prev, reward];
     });
-    showToast(`Reward "${reward.title}" berhasil disimpan.`, 'success');
+    try {
+      setDoc(doc(db, 'rewards', reward.id), reward).catch(() => {});
+    } catch {}
+    showToast(`Reward "${reward.title}" berhasil disimpan ke database.`, 'success');
   };
 
   const deleteReward = (id: string) => {
     setRewards((prev) => prev.filter((r) => r.id !== id));
+    try {
+      deleteDoc(doc(db, 'rewards', id)).catch(() => {});
+    } catch {}
     showToast('Reward berhasil dihapus.', 'info');
   };
 
@@ -987,11 +1134,17 @@ export function AppProvider({ children }: { children: ReactNode }) {
       const exists = prev.some((v) => v.id === voucher.id);
       return exists ? prev.map((v) => (v.id === voucher.id ? voucher : v)) : [...prev, voucher];
     });
-    showToast(`Voucher "${voucher.title}" berhasil disimpan.`, 'success');
+    try {
+      setDoc(doc(db, 'vouchers', voucher.id), voucher).catch(() => {});
+    } catch {}
+    showToast(`Voucher "${voucher.title}" berhasil disimpan ke database.`, 'success');
   };
 
   const deleteVoucher = (id: string) => {
     setVouchers((prev) => prev.filter((v) => v.id !== id));
+    try {
+      deleteDoc(doc(db, 'vouchers', id)).catch(() => {});
+    } catch {}
     showToast('Voucher berhasil dihapus.', 'info');
   };
 
@@ -1001,25 +1154,40 @@ export function AppProvider({ children }: { children: ReactNode }) {
       const exists = prev.some((p) => p.id === promo.id);
       return exists ? prev.map((p) => (p.id === promo.id ? promo : p)) : [...prev, promo];
     });
-    showToast(`Kampanye promosi "${promo.title}" disimpan.`, 'success');
+    try {
+      setDoc(doc(db, 'promotions', promo.id), promo).catch(() => {});
+    } catch {}
+    showToast(`Kampanye promosi "${promo.title}" disimpan ke database.`, 'success');
   };
 
   const deletePromotion = (id: string) => {
     setPromotions((prev) => prev.filter((p) => p.id !== id));
+    try {
+      deleteDoc(doc(db, 'promotions', id)).catch(() => {});
+    } catch {}
     showToast('Kampanye promosi berhasil dihapus.', 'info');
   };
 
   // Point Rules & Settings
   const savePointRules = (newRules: PointRuleConfig) => {
     setPointRules(newRules);
+    try {
+      setDoc(doc(db, 'system_settings', 'point_rules'), newRules).catch(() => {});
+    } catch {}
     logAudit('UPDATE_POINT_RULES', 'POINTS', 'config', JSON.stringify(pointRules), JSON.stringify(newRules));
-    showToast('Konfigurasi perolehan poin global berhasil disimpan.', 'success');
+    showToast('Konfigurasi perolehan poin global berhasil disimpan ke database.', 'success');
   };
 
   const updateSystemSettings = (settings: Partial<HotelSystemSettings>) => {
-    setSystemSettings((prev) => ({ ...prev, ...settings }));
+    setSystemSettings((prev) => {
+      const updated = { ...prev, ...settings };
+      try {
+        setDoc(doc(db, 'system_settings', 'hotel_settings'), updated).catch(() => {});
+      } catch {}
+      return updated;
+    });
     logAudit('UPDATE_SETTINGS', 'SYSTEM', 'global_settings', JSON.stringify(systemSettings), JSON.stringify(settings));
-    showToast('Pengaturan global properti berhasil diperbarui.', 'success');
+    showToast('Pengaturan global properti berhasil diperbarui di database.', 'success');
   };
 
   const updateWhatsAppConfig = (config: Partial<PingCoIdWhatsAppConfig>) => {
@@ -1162,14 +1330,40 @@ export function AppProvider({ children }: { children: ReactNode }) {
       const exists = prev.some((u) => u.id === user.id);
       return exists ? prev.map((u) => (u.id === user.id ? user : u)) : [...prev, user];
     });
+    try {
+      setDoc(doc(db, 'users', user.id), user).catch(() => {});
+    } catch {}
     logAudit('SAVE_USER', 'USERS', user.id, 'None', `User: ${user.name} (${user.email})`);
-    showToast(`Akun staf "${user.name}" berhasil disimpan.`, 'success');
+    showToast(`Akun staf "${user.name}" berhasil disimpan ke database.`, 'success');
   };
 
   const deleteUser = (userId: string) => {
     setUsers((prev) => prev.filter((u) => u.id !== userId));
+    try {
+      deleteDoc(doc(db, 'users', userId)).catch(() => {});
+    } catch {}
     logAudit('DELETE_USER', 'USERS', userId, 'None', 'DELETED');
     showToast('Akun staf berhasil dihapus.', 'info');
+  };
+
+  // Force Full Sync to Cloud
+  const forceSyncToCloud = async (): Promise<boolean> => {
+    const res = await pushAllToFirestore({
+      members,
+      tiers,
+      benefits,
+      rules,
+      stays,
+      transactions,
+      pointTransactions,
+      rewards,
+      vouchers,
+      promotions,
+      systemSettings,
+      users,
+      roles,
+    });
+    return res.success;
   };
 
   // Notifications
@@ -1237,6 +1431,12 @@ export function AppProvider({ children }: { children: ReactNode }) {
         whatsappLogs,
         emailConfig,
         emailLogs,
+        isSyncModalOpen,
+        openSyncModal: () => setIsSyncModalOpen(true),
+        closeSyncModal: () => setIsSyncModalOpen(false),
+        isMemberDomain,
+        customDomain: MEMBER_CUSTOM_DOMAIN,
+        forceSyncToCloud,
         addMember,
         updateMember,
         deleteMember,

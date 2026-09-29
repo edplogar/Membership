@@ -148,6 +148,54 @@
         "messageTemplateTierUpgrade": { "type": "string", "maxLength": 2048 }
       },
       "required": ["apiKey", "senderPhone", "deviceStatus"]
+    },
+    "Reward": {
+      "title": "Reward",
+      "description": "Loyalty points redeemable reward item",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string", "maxLength": 128 },
+        "title": { "type": "string", "maxLength": 256 },
+        "description": { "type": "string", "maxLength": 1024 },
+        "category": { "type": "string", "maxLength": 64 },
+        "pointsRequired": { "type": "number" },
+        "stock": { "type": "number" },
+        "validityDays": { "type": "number" },
+        "terms": { "type": "string", "maxLength": 1024 },
+        "status": { "type": "string", "enum": ["active", "inactive"] }
+      },
+      "required": ["id", "title", "pointsRequired", "status"]
+    },
+    "Voucher": {
+      "title": "Voucher",
+      "description": "Promotional or loyalty discount voucher",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string", "maxLength": 128 },
+        "code": { "type": "string", "maxLength": 64 },
+        "title": { "type": "string", "maxLength": 256 },
+        "description": { "type": "string", "maxLength": 1024 },
+        "type": { "type": "string", "enum": ["fixed", "percent", "complimentary"] },
+        "discountValue": { "type": "number" },
+        "minTransaction": { "type": "number" },
+        "maxDiscount": { "type": "number" },
+        "status": { "type": "string", "enum": ["active", "inactive", "expired"] }
+      },
+      "required": ["id", "code", "title", "type", "discountValue", "status"]
+    },
+    "PromotionCampaign": {
+      "title": "PromotionCampaign",
+      "description": "Hotel promotional marketing campaign",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string", "maxLength": 128 },
+        "title": { "type": "string", "maxLength": 256 },
+        "description": { "type": "string", "maxLength": 1024 },
+        "startDate": { "type": "string", "maxLength": 64 },
+        "endDate": { "type": "string", "maxLength": 64 },
+        "status": { "type": "string", "enum": ["active", "upcoming", "ended"] }
+      },
+      "required": ["id", "title", "status"]
     }
   },
   "firestore": {
@@ -158,6 +206,14 @@
     "/membership_tiers/{tierId}": {
       "schema": "MembershipTier",
       "description": "Membership tiers"
+    },
+    "/membership_benefits/{benefitId}": {
+      "schema": "Member",
+      "description": "Membership benefits"
+    },
+    "/membership_rules/{ruleId}": {
+      "schema": "Member",
+      "description": "Dynamic evaluation rules"
     },
     "/stays/{stayId}": {
       "schema": "Stay",
@@ -170,6 +226,18 @@
     "/point_transactions/{pointId}": {
       "schema": "PointTransaction",
       "description": "Points ledger"
+    },
+    "/rewards/{rewardId}": {
+      "schema": "Reward",
+      "description": "Redeemable rewards catalog"
+    },
+    "/vouchers/{voucherId}": {
+      "schema": "Voucher",
+      "description": "Vouchers and discount codes"
+    },
+    "/promotions/{promoId}": {
+      "schema": "PromotionCampaign",
+      "description": "Hotel promotional campaigns"
     },
     "/whatsapp_logs/{logId}": {
       "schema": "WhatsAppMessageLog",
