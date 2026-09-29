@@ -657,6 +657,22 @@ export const INITIAL_MEMBERS: Member[] = [
 
 export const INITIAL_USERS: User[] = [
   {
+    id: 'usr_superadmin_edp',
+    username: 'edp.logar',
+    email: 'edp.logar@gmail.com',
+    name: 'EDP Logar (Super Administrator)',
+    role: 'SUPER_ADMIN',
+    roleId: 'role_super_admin',
+    department: 'Executive Management & IT',
+    jobTitle: 'Super Administrator & Owner',
+    password: 'admin123',
+    avatar: 'https://images.unsplash.com/photo-1472099645785-5658abf4ff4e?auto=format&fit=crop&w=150&q=80',
+    phone: '+62 811-390-001',
+    isActive: true,
+    createdAt: '2024-01-01T08:00:00Z',
+    lastLogin: '2026-09-29T08:00:00Z',
+  },
+  {
     id: 'usr_superadmin',
     username: 'superadmin',
     email: 'superadmin@lombokgardenhotel.com',

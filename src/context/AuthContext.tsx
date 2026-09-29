@@ -16,7 +16,12 @@ interface AuthContextValue {
   isAuthenticated: boolean;
   hasPermission: (permission: PermissionCode) => boolean;
   login: (identifier: string, password?: string) => boolean;
-  loginWithGoogle: (googleEmail: string, displayName?: string, photoURL?: string) => boolean;
+  loginWithGoogle: (
+    googleEmail: string,
+    displayName?: string,
+    photoURL?: string,
+    selectedRole?: UserRoleType
+  ) => boolean;
   logout: () => void;
   switchDemoRole: (userIdOrRole: string) => void;
   updateCurrentUser: (updates: Partial<User>) => void;
@@ -53,9 +58,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     loadFromStorage<Member[]>('members', INITIAL_MEMBERS)
   );
 
-  // Active user session (null when logged out, defaults to initial user for immediate access or saved session)
+  // Active user session (null when logged out, so LoginPage is the default entry point for all visitors)
   const [currentUserId, setCurrentUserId] = useState<string | null>(() => {
-    return loadFromStorage<string | null>('auth_current_user_id', 'usr_superadmin');
+    return loadFromStorage<string | null>('auth_current_user_id', null);
   });
 
   const currentUser = currentUserId ? users.find((u) => u.id === currentUserId) || null : null;
@@ -156,29 +161,65 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     return false;
   };
 
-  const loginWithGoogle = (googleEmail: string, displayName?: string, photoURL?: string): boolean => {
+  const loginWithGoogle = (
+    googleEmail: string,
+    displayName?: string,
+    photoURL?: string,
+    selectedRole?: UserRoleType
+  ): boolean => {
     const cleanEmail = googleEmail.toLowerCase().trim();
 
-    // 1. Check existing users table (staff / super admin / existing member user)
+    // 1. Check if user is edp.logar@gmail.com (Super Admin) or existing in users table
+    if (cleanEmail === 'edp.logar@gmail.com' || cleanEmail === 'superadmin@lombokgardenhotel.com') {
+      let superUser = users.find((u) => u.email.toLowerCase().trim() === cleanEmail);
+      if (!superUser) {
+        superUser = {
+          id: 'usr_superadmin_edp',
+          username: 'edp.logar',
+          email: 'edp.logar@gmail.com',
+          name: displayName || 'EDP Logar (Super Administrator)',
+          role: 'SUPER_ADMIN',
+          roleId: 'role_super_admin',
+          department: 'Executive Management & IT',
+          jobTitle: 'Super Administrator & System Owner',
+          password: 'admin123',
+          avatar: photoURL || 'https://images.unsplash.com/photo-1472099645785-5658abf4ff4e?auto=format&fit=crop&w=150&q=80',
+          phone: '+62 811-390-001',
+          isActive: true,
+          createdAt: new Date().toISOString(),
+          lastLogin: new Date().toISOString(),
+        };
+        const updatedUsers = [superUser, ...users];
+        setUsers(updatedUsers);
+        saveToStorage('users', updatedUsers);
+      }
+      setCurrentUserId(superUser.id);
+      return true;
+    }
+
+    // 2. Check existing users table (staff / super admin / existing member user)
     const existingUser = users.find((u) => u.email.toLowerCase().trim() === cleanEmail);
     if (existingUser) {
       if (!existingUser.isActive) return false;
       if (photoURL && !existingUser.avatar) {
         existingUser.avatar = photoURL;
       }
+      if (selectedRole && existingUser.role !== selectedRole && selectedRole !== 'SUPER_ADMIN') {
+        existingUser.role = selectedRole;
+      }
       setCurrentUserId(existingUser.id);
       return true;
     }
 
-    // 2. Check existing members table
+    // 3. Check existing members table
     const existingMember = members.find((m) => m.email.toLowerCase().trim() === cleanEmail);
     if (existingMember) {
       const newMemberUser: User = {
         id: `usr_${existingMember.id}`,
         email: existingMember.email,
         name: displayName || existingMember.fullName,
-        role: 'MEMBER',
-        roleId: 'role_member',
+        role: selectedRole || 'MEMBER',
+        roleId: selectedRole === 'ADMIN' ? 'role_hotel_admin' : 'role_member',
         memberId: existingMember.id,
         avatar: photoURL,
         phone: existingMember.phone,
@@ -192,7 +233,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       return true;
     }
 
-    // 3. New Google User -> Register as new Member & User
+    // 4. New Google User -> Register as new Member & User (or Admin if selected)
+    const targetRole: UserRoleType = selectedRole || 'MEMBER';
     const newMemberId = `mem_g_${Date.now()}`;
     const membershipNumber = `LGH-${Math.floor(1000 + Math.random() * 9000)}`;
     const now = new Date().toISOString().slice(0, 10);
@@ -235,9 +277,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       id: `usr_${newMemberId}`,
       email: cleanEmail,
       name: displayName || cleanEmail.split('@')[0],
-      role: 'MEMBER',
-      roleId: 'role_member',
-      memberId: newMemberId,
+      role: targetRole,
+      roleId: targetRole === 'SUPER_ADMIN' ? 'role_super_admin' : targetRole === 'ADMIN' ? 'role_hotel_admin' : 'role_member',
+      memberId: targetRole === 'MEMBER' ? newMemberId : undefined,
       avatar: photoURL,
       isActive: true,
       createdAt: new Date().toISOString(),

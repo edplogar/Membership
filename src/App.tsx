@@ -118,7 +118,7 @@ function MainApp() {
   const nextTier = sortedTiers.find((t) => t.level === currentTier.level + 1);
 
   return (
-    <div className="min-h-screen bg-stone-50 flex flex-col font-sans text-stone-900 selection:bg-emerald-800 selection:text-white">
+    <div className="min-h-screen bg-[#f8f7f2] flex flex-col font-sans text-stone-900 selection:bg-[#00A651] selection:text-white">
       {/* 1. Fast Role Switcher & System Reset Toolbar */}
       <DemoRoleBar onOpenScanner={() => setIsScannerOpen(true)} />
 

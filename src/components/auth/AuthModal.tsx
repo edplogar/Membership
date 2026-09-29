@@ -5,7 +5,7 @@ import { useToast } from '../../context/ToastContext';
 import { Modal } from '../common/Modal';
 import { LombokGardenLogo } from '../common/LombokGardenLogo';
 import { signInWithGoogleAccount } from '../../services/firebase';
-import { Lock, Mail, User, Phone, CheckCircle2, AlertCircle } from 'lucide-react';
+import { Lock, Mail, User, Phone, CheckCircle2, AlertCircle, Copy, ExternalLink, Check } from 'lucide-react';
 
 interface AuthModalProps {
   isOpen: boolean;
@@ -27,6 +27,8 @@ export const AuthModal: React.FC<AuthModalProps> = ({
   const [loginPassword, setLoginPassword] = useState('');
   const [isGoogleLoading, setIsGoogleLoading] = useState(false);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
+  const [unauthorizedDomain, setUnauthorizedDomain] = useState<string | null>(null);
+  const [copiedDomain, setCopiedDomain] = useState(false);
 
   // Register form state
   const [regForm, setRegForm] = useState({
@@ -62,6 +64,7 @@ export const AuthModal: React.FC<AuthModalProps> = ({
 
   const handleGoogleSignIn = async () => {
     setErrorMessage(null);
+    setUnauthorizedDomain(null);
     setIsGoogleLoading(true);
 
     try {
@@ -80,14 +83,28 @@ export const AuthModal: React.FC<AuthModalProps> = ({
           setErrorMessage('Akun Google berhasil diverifikasi namun status akun tidak aktif.');
         }
       } else {
+        if (res.isUnauthorizedDomain) {
+          setUnauthorizedDomain(res.domain || window.location.hostname);
+        }
         setErrorMessage(res.error || 'Verifikasi akun Google dibatalkan atau gagal.');
       }
     } catch (err: unknown) {
       const errText = err instanceof Error ? err.message : String(err);
+      if (errText.toLowerCase().includes('unauthorized domain')) {
+        setUnauthorizedDomain(window.location.hostname);
+      }
       setErrorMessage(`Kendala autentikasi Google: ${errText}`);
     } finally {
       setIsGoogleLoading(false);
     }
+  };
+
+  const handleCopyDomain = () => {
+    const domain = unauthorizedDomain || window.location.hostname;
+    navigator.clipboard.writeText(domain);
+    setCopiedDomain(true);
+    showToast(`Domain "${domain}" berhasil disalin!`, 'success');
+    setTimeout(() => setCopiedDomain(false), 2500);
   };
 
   const handleRegisterSubmit = (e: React.FormEvent) => {
@@ -153,7 +170,30 @@ export const AuthModal: React.FC<AuthModalProps> = ({
         {errorMessage && (
           <div className="p-3 rounded-xl bg-rose-50 border border-rose-200 text-rose-800 text-xs flex items-start gap-2">
             <AlertCircle className="w-4 h-4 text-rose-600 shrink-0 mt-0.5" />
-            <div>{errorMessage}</div>
+            <div className="flex-1">
+              <div>{errorMessage}</div>
+              {unauthorizedDomain && (
+                <div className="mt-2 pt-2 border-t border-rose-200 flex flex-wrap items-center gap-2">
+                  <button
+                    type="button"
+                    onClick={handleCopyDomain}
+                    className="px-2 py-1 bg-rose-100 hover:bg-rose-200 text-rose-900 rounded-md text-[10px] font-bold inline-flex items-center gap-1 cursor-pointer"
+                  >
+                    {copiedDomain ? <Check className="w-3 h-3 text-emerald-600" /> : <Copy className="w-3 h-3" />}
+                    <span>{copiedDomain ? 'Tersalin!' : `Salin: ${unauthorizedDomain}`}</span>
+                  </button>
+                  <a
+                    href="https://console.firebase.google.com/project/studious-ally-rmn89/authentication/settings"
+                    target="_blank"
+                    rel="noreferrer"
+                    className="px-2 py-1 bg-rose-700 hover:bg-rose-800 text-white rounded-md text-[10px] font-bold inline-flex items-center gap-1"
+                  >
+                    <span>Firebase Authorized Domains</span>
+                    <ExternalLink className="w-3 h-3" />
+                  </a>
+                </div>
+              )}
+            </div>
           </div>
         )}
 

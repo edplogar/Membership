@@ -28,8 +28,18 @@ export async function sendFirebasePasswordResetEmail(email: string) {
   }
 }
 
+export interface GoogleAuthResult {
+  success: boolean;
+  user: any | null;
+  error: string | null;
+  code?: string;
+  isUnauthorizedDomain?: boolean;
+  domain?: string;
+}
+
 // Google Account Authentication Helper
-export async function signInWithGoogleAccount() {
+export async function signInWithGoogleAccount(): Promise<GoogleAuthResult> {
+  const currentHost = typeof window !== 'undefined' ? window.location.hostname : '';
   try {
     const provider = new GoogleAuthProvider();
     provider.setCustomParameters({ prompt: 'select_account' });
@@ -41,15 +51,35 @@ export async function signInWithGoogleAccount() {
     };
   } catch (err: unknown) {
     const errObj = err as Error & { code?: string };
-    console.warn('Google Sign-In Error:', errObj?.message || err);
+    const errCode = errObj?.code || '';
+    console.warn('Google Sign-In Error:', errCode, errObj?.message || err);
+
+    const isUnauthorized = Boolean(
+      errCode === 'auth/unauthorized-domain' ||
+      (errObj?.message && errObj.message.toLowerCase().includes('unauthorized domain')) ||
+      (errObj?.message && errObj.message.toLowerCase().includes('not authorized for oauth'))
+    );
+
+    let errorDescription = 'Gagal melakukan verifikasi akun Google.';
+    if (isUnauthorized) {
+      errorDescription = `Domain "${currentHost}" belum diizinkan (Authorized Domain) di Firebase Console. Tambahkan domain ini di Firebase Console > Authentication > Settings > Authorized domains.`;
+    } else if (errCode === 'auth/popup-closed-by-user') {
+      errorDescription = 'Jendela verifikasi Google ditutup sebelum proses selesai.';
+    } else if (errCode === 'auth/popup-blocked') {
+      errorDescription = 'Jendela pop-up Google diblokir oleh browser. Harap izinkan pop-up untuk situs ini.';
+    } else if (errCode === 'auth/cancelled-popup-request') {
+      errorDescription = 'Permintaan verifikasi Google sebelumnya dibatalkan.';
+    } else if (errObj?.message) {
+      errorDescription = errObj.message;
+    }
+
     return {
       success: false,
       user: null,
-      error: errObj?.code === 'auth/popup-closed-by-user'
-        ? 'Jendela verifikasi Google ditutup sebelum proses selesai.'
-        : errObj?.code === 'auth/popup-blocked'
-        ? 'Jendela pop-up Google diblokir browser. Harap izinkan pop-up untuk situs ini.'
-        : errObj?.message || 'Gagal melakukan verifikasi akun Google.',
+      error: errorDescription,
+      code: errCode,
+      isUnauthorizedDomain: isUnauthorized,
+      domain: currentHost,
     };
   }
 }

@@ -80,7 +80,7 @@ export const Navbar: React.FC<NavbarProps> = ({
   const navLinks = getNavLinks();
 
   return (
-    <header className="sticky top-8 z-30 bg-stone-900/95 backdrop-blur-md border-b border-stone-800 text-stone-100">
+    <header className="sticky top-8 z-30 bg-[#072417]/95 backdrop-blur-md border-b border-[#0e4029] text-stone-100 shadow-md">
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 h-16 flex items-center justify-between gap-4">
         {/* Zone 1: Official Lombok Garden Hotel Logo (Preserving exact shape & #00A651 color) */}
         <button
@@ -88,28 +88,28 @@ export const Navbar: React.FC<NavbarProps> = ({
           className="text-left group cursor-pointer focus:outline-hidden py-1"
           title="Lombok Garden Hotel"
         >
-          <div className="p-1 px-2.5 bg-white rounded-xl shadow-xs border border-stone-200 hover:border-emerald-300 transition-colors">
+          <div className="p-1 px-2.5 bg-white rounded-xl shadow-xs border border-[#00A651]/30 hover:border-[#00A651] transition-all">
             <LombokGardenLogo variant="horizontal" size="sm" />
           </div>
         </button>
 
         {/* Zone 2: 4–6 clean text navigation links */}
-        <nav className="hidden lg:flex items-center gap-6 text-xs sm:text-sm font-medium text-stone-300">
+        <nav className="hidden lg:flex items-center gap-6 text-xs sm:text-sm font-medium text-emerald-100/90">
           {navLinks.map((link) => {
             const isActive = currentTab === link.id;
             return (
               <button
                 key={link.id}
                 onClick={() => onTabChange(link.id)}
-                className={`transition-colors whitespace-nowrap relative py-2 ${
+                className={`transition-all whitespace-nowrap relative py-2 ${
                   isActive
-                    ? 'text-amber-400 font-semibold'
-                    : 'text-stone-300 hover:text-stone-100'
+                    ? 'text-white font-bold'
+                    : 'text-emerald-100/70 hover:text-white'
                 }`}
               >
                 {link.label}
                 {isActive && (
-                  <span className="absolute bottom-0 left-0 right-0 h-0.5 bg-amber-400 rounded-full" />
+                  <span className="absolute bottom-0 left-0 right-0 h-0.5 bg-[#00A651] rounded-full shadow-[0_0_8px_#00A651]" />
                 )}
               </button>
             );
@@ -122,11 +122,11 @@ export const Navbar: React.FC<NavbarProps> = ({
           {userRole !== 'MEMBER' && (
             <button
               onClick={onSearchClick}
-              className="p-2 text-stone-300 hover:text-white hover:bg-stone-800 rounded-lg transition-colors flex items-center gap-1.5 text-xs"
+              className="p-2 text-emerald-200 hover:text-white hover:bg-[#0c3522] rounded-xl transition-colors flex items-center gap-1.5 text-xs border border-[#13492e]"
               title="Cari Member atau Transaksi"
             >
-              <Search className="w-4 h-4 text-stone-400" />
-              <span className="hidden xl:inline text-stone-400 font-mono text-[11px]">
+              <Search className="w-4 h-4 text-emerald-400" />
+              <span className="hidden xl:inline text-emerald-300/80 font-mono text-[11px]">
                 Cari...
               </span>
             </button>
@@ -136,25 +136,25 @@ export const Navbar: React.FC<NavbarProps> = ({
           <div className="relative">
             <button
               onClick={() => setShowNotifications(!showNotifications)}
-              className="p-2 text-stone-300 hover:text-white hover:bg-stone-800 rounded-lg relative transition-colors"
+              className="p-2 text-emerald-200 hover:text-white hover:bg-[#0c3522] rounded-xl relative transition-colors border border-[#13492e]"
               title="Notifikasi"
             >
               <Bell className="w-4 h-4" />
               {unreadCount > 0 && (
-                <span className="absolute top-1.5 right-1.5 w-2 h-2 bg-amber-400 rounded-full ring-2 ring-stone-900" />
+                <span className="absolute top-1.5 right-1.5 w-2 h-2 bg-[#00A651] rounded-full ring-2 ring-[#072417] animate-pulse" />
               )}
             </button>
 
             {/* Notification Dropdown Drawer */}
             {showNotifications && (
-              <div className="absolute right-0 mt-2 w-80 sm:w-96 bg-stone-900 border border-stone-700 rounded-2xl shadow-2xl overflow-hidden z-50 animate-in fade-in duration-100">
-                <div className="px-4 py-3 border-b border-stone-800 flex items-center justify-between bg-stone-950/60">
+              <div className="absolute right-0 mt-2 w-80 sm:w-96 bg-[#061d13] border border-[#12422a] rounded-2xl shadow-2xl overflow-hidden z-50 animate-in fade-in duration-100">
+                <div className="px-4 py-3 border-b border-[#12422a] flex items-center justify-between bg-[#04140d]">
                   <div className="flex items-center gap-2">
-                    <span className="text-xs font-semibold text-stone-200 uppercase tracking-wider">
+                    <span className="text-xs font-semibold text-emerald-100 uppercase tracking-wider">
                       Notifikasi
                     </span>
                     {unreadCount > 0 && (
-                      <span className="text-[10px] bg-amber-500/20 text-amber-300 font-mono px-1.5 py-0.2 rounded font-semibold">
+                      <span className="text-[10px] bg-[#00A651]/20 text-emerald-300 font-mono px-1.5 py-0.5 rounded-full font-semibold border border-[#00A651]/40">
                         {unreadCount} baru
                       </span>
                     )}
@@ -162,17 +162,16 @@ export const Navbar: React.FC<NavbarProps> = ({
                   {unreadCount > 0 && (
                     <button
                       onClick={markAllNotificationsRead}
-                      className="text-[11px] text-stone-400 hover:text-amber-400 flex items-center gap-1"
+                      className="text-[11px] text-[#00A651] hover:underline cursor-pointer font-medium"
                     >
-                      <Check className="w-3 h-3" />
-                      Tandai dibaca
+                      Tandai semua dibaca
                     </button>
                   )}
                 </div>
 
-                <div className="max-h-72 overflow-y-auto divide-y divide-stone-800/60">
+                <div className="max-h-72 overflow-y-auto divide-y divide-[#0e3321]">
                   {userNotifs.length === 0 ? (
-                    <div className="p-6 text-center text-xs text-stone-500">
+                    <div className="p-6 text-center text-xs text-stone-400">
                       Tidak ada notifikasi baru saat ini.
                     </div>
                   ) : (
@@ -180,22 +179,22 @@ export const Navbar: React.FC<NavbarProps> = ({
                       <div
                         key={n.id}
                         onClick={() => markNotificationRead(n.id)}
-                        className={`p-3.5 hover:bg-stone-800/50 cursor-pointer transition-colors ${
-                          !n.isRead ? 'bg-stone-800/30' : ''
+                        className={`p-3.5 hover:bg-[#0a2e1d] cursor-pointer transition-colors ${
+                          !n.isRead ? 'bg-[#0a2e1d]/50' : ''
                         }`}
                       >
                         <div className="flex items-start justify-between gap-2">
-                          <h4 className="text-xs font-semibold text-stone-200 leading-tight">
+                          <h4 className="text-xs font-semibold text-stone-100 leading-tight">
                             {n.title}
                           </h4>
                           {!n.isRead && (
-                            <span className="w-1.5 h-1.5 rounded-full bg-amber-400 shrink-0 mt-1" />
+                            <span className="w-1.5 h-1.5 rounded-full bg-[#00A651] shrink-0 mt-1" />
                           )}
                         </div>
-                        <p className="text-[11px] text-stone-400 mt-1 leading-relaxed">
+                        <p className="text-[11px] text-stone-300 mt-1 leading-relaxed">
                           {n.message}
                         </p>
-                        <div className="text-[9px] text-stone-500 font-mono mt-1.5">
+                        <div className="text-[9px] text-stone-400 font-mono mt-1.5">
                           {new Date(n.createdAt).toLocaleDateString('id-ID', {
                             hour: '2-digit',
                             minute: '2-digit',
@@ -216,34 +215,34 @@ export const Navbar: React.FC<NavbarProps> = ({
             <div className="relative">
               <button
                 onClick={() => setShowUserMenu(!showUserMenu)}
-                className="flex items-center gap-2 p-1.5 rounded-lg hover:bg-stone-800 text-stone-200 transition-colors cursor-pointer"
+                className="flex items-center gap-2 p-1.5 rounded-xl hover:bg-[#0c3522] text-stone-100 transition-colors cursor-pointer border border-[#13492e]"
               >
                 {currentUser?.avatar ? (
                   <img
                     src={currentUser.avatar}
                     alt={currentUser.name}
-                    className="w-7 h-7 rounded-full object-cover border border-emerald-500"
+                    className="w-7 h-7 rounded-lg object-cover ring-1 ring-[#00A651]"
                   />
                 ) : (
-                  <div className="w-7 h-7 rounded-full bg-emerald-800 border border-emerald-600 flex items-center justify-center text-xs font-bold text-emerald-200">
+                  <div className="w-7 h-7 rounded-lg bg-[#00A651] text-white flex items-center justify-center text-xs font-bold font-serif">
                     {currentUser?.name ? currentUser.name.charAt(0) : 'U'}
                   </div>
                 )}
-                <span className="hidden md:inline text-xs font-medium text-stone-200 max-w-[120px] truncate">
+                <span className="hidden md:inline text-xs font-medium text-emerald-100 max-w-[120px] truncate">
                   {currentUser?.name?.split(' ')[0]}
                 </span>
               </button>
 
               {showUserMenu && (
-                <div className="absolute right-0 mt-2 w-56 bg-stone-900 border border-stone-700 rounded-xl shadow-2xl py-1 z-50 animate-in fade-in">
-                  <div className="px-3.5 py-2.5 border-b border-stone-800">
-                    <div className="text-xs font-semibold text-stone-100 truncate">
+                <div className="absolute right-0 mt-2 w-56 bg-[#061d13] border border-[#12422a] rounded-2xl shadow-2xl py-1.5 z-50 animate-in fade-in">
+                  <div className="px-3.5 py-2.5 border-b border-[#0e3321]">
+                    <div className="text-xs font-semibold text-white truncate">
                       {currentUser?.name}
                     </div>
-                    <div className="text-[10px] text-stone-400 truncate">
+                    <div className="text-[10px] text-emerald-400 font-mono truncate">
                       {currentUser?.email}
                     </div>
-                    <div className="text-[10px] font-mono text-amber-400 mt-1 uppercase font-semibold">
+                    <div className="text-[10px] font-mono text-[#00A651] mt-1 uppercase font-bold">
                       {userRole}
                     </div>
                   </div>
@@ -254,7 +253,7 @@ export const Navbar: React.FC<NavbarProps> = ({
                       setIsProfileModalOpen(true);
                       setShowUserMenu(false);
                     }}
-                    className="w-full px-3.5 py-2 text-left hover:bg-stone-800 text-xs text-stone-200 flex items-center gap-2 transition-colors cursor-pointer"
+                    className="w-full px-3.5 py-2 text-left hover:bg-[#0c3522] text-xs text-emerald-100 flex items-center gap-2 transition-colors cursor-pointer"
                   >
                     <User className="w-3.5 h-3.5 text-[#00A651]" />
                     <span>
@@ -272,9 +271,9 @@ export const Navbar: React.FC<NavbarProps> = ({
                         onTabChange('profile');
                         setShowUserMenu(false);
                       }}
-                      className="w-full px-3.5 py-2 text-left hover:bg-stone-800 text-xs text-stone-300 flex items-center gap-2 transition-colors cursor-pointer"
+                      className="w-full px-3.5 py-2 text-left hover:bg-[#0c3522] text-xs text-stone-300 flex items-center gap-2 transition-colors cursor-pointer"
                     >
-                      <Settings className="w-3.5 h-3.5 text-stone-400" />
+                      <Settings className="w-3.5 h-3.5 text-emerald-400" />
                       <span>Halaman Profil Member</span>
                     </button>
                   )}
@@ -284,7 +283,7 @@ export const Navbar: React.FC<NavbarProps> = ({
                       logout();
                       setShowUserMenu(false);
                     }}
-                    className="w-full px-3.5 py-2 text-left hover:bg-stone-800 text-xs text-rose-400 flex items-center gap-2 transition-colors cursor-pointer border-t border-stone-800 mt-1 pt-2"
+                    className="w-full px-3.5 py-2 text-left hover:bg-rose-950/40 text-xs text-rose-400 flex items-center gap-2 transition-colors cursor-pointer border-t border-[#0e3321] mt-1 pt-2"
                   >
                     <LogOut className="w-3.5 h-3.5" />
                     <span>Keluar / Logout</span>
@@ -295,10 +294,10 @@ export const Navbar: React.FC<NavbarProps> = ({
           ) : (
             <button
               onClick={onOpenLogin}
-              className="px-3.5 py-2 rounded-xl bg-[#00A651] hover:bg-[#009647] text-white text-xs font-bold flex items-center gap-1.5 transition-colors shadow-xs cursor-pointer"
+              className="px-3.5 py-2 rounded-xl bg-[#00A651] hover:bg-[#008f45] text-white text-xs font-bold flex items-center gap-1.5 transition-colors shadow-xs cursor-pointer"
             >
               <LogIn className="w-3.5 h-3.5" />
-              <span>Masuk Akun</span>
+              <span>Masuk</span>
             </button>
           )}
         </div>
