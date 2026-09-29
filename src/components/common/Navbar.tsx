@@ -13,6 +13,7 @@ import {
   Settings,
   ShieldCheck,
   QrCode,
+  Mail,
 } from 'lucide-react';
 
 interface NavbarProps {
@@ -72,8 +73,8 @@ export const Navbar: React.FC<NavbarProps> = ({
         { id: 'super_dashboard', label: 'Control Center' },
         { id: 'admin_members', label: 'Member' },
         { id: 'admin_points', label: 'Manajemen Poin' },
+        { id: 'super_email', label: 'Email & Reset' },
         { id: 'admin_transactions', label: 'Transaksi' },
-        { id: 'admin_tiers', label: 'Tier Engine' },
         { id: 'super_whatsapp', label: 'WhatsApp CRM' },
         { id: 'super_admins', label: 'Hak Akses' },
         { id: 'admin_audit', label: 'Audit Log' },
@@ -280,6 +281,19 @@ export const Navbar: React.FC<NavbarProps> = ({
                         : 'Edit Profil & Akun'}
                     </span>
                   </button>
+
+                  {userRole === 'SUPER_ADMIN' && (
+                    <button
+                      onClick={() => {
+                        onTabChange('super_email');
+                        setShowUserMenu(false);
+                      }}
+                      className="w-full px-3.5 py-2 text-left hover:bg-[#0c3522] text-xs text-emerald-100 flex items-center gap-2 transition-colors cursor-pointer"
+                    >
+                      <Mail className="w-3.5 h-3.5 text-[#00A651]" />
+                      <span>Pengaturan Email & Reset</span>
+                    </button>
+                  )}
 
                   {userRole === 'MEMBER' && (
                     <button

@@ -5,6 +5,7 @@ import { useToast } from '../../context/ToastContext';
 import { Member, MembershipTier } from '../../types';
 import { formatIDR, formatDateIndo } from '../../services/membershipEngine';
 import { exportToCSV } from '../../services/exportService';
+import { sendFirebasePasswordResetEmail } from '../../services/firebase';
 import { Modal } from '../common/Modal';
 import { ConfirmDialog } from '../common/ConfirmDialog';
 import {
@@ -44,7 +45,7 @@ export const MemberList: React.FC<MemberListProps> = ({
   onCloseAddModal: externalAddClose,
 }) => {
   const { members, tiers, addMember, updateMember, deleteMember } = useApp();
-  const { hasPermission } = useAuth();
+  const { hasPermission, userRole } = useAuth();
   const { showToast } = useToast();
 
   const [searchQuery, setSearchQuery] = useState('');
@@ -437,10 +438,21 @@ export const MemberList: React.FC<MemberListProps> = ({
                           <button
                             onClick={() => setMemberToResetPassword(m)}
                             className="p-1.5 text-stone-400 hover:text-stone-700 hover:bg-stone-100 rounded-lg transition-colors"
-                            title="Reset Kata Sandi"
+                            title="Reset Kata Sandi Member"
                           >
                             <KeyRound className="w-3.5 h-3.5" />
                           </button>
+
+                          {/* Delete Member - STRICTLY FOR SUPER ADMIN */}
+                          {userRole === 'SUPER_ADMIN' && (
+                            <button
+                              onClick={() => setMemberToDelete(m)}
+                              className="p-1.5 text-rose-500 hover:text-rose-700 hover:bg-rose-50 rounded-lg transition-colors"
+                              title="Hapus Member Permanen (Khusus Super Admin)"
+                            >
+                              <Trash2 className="w-3.5 h-3.5" />
+                            </button>
+                          )}
                         </div>
                       </td>
                     </tr>
@@ -673,16 +685,39 @@ export const MemberList: React.FC<MemberListProps> = ({
       <ConfirmDialog
         isOpen={Boolean(memberToResetPassword)}
         onClose={() => setMemberToResetPassword(null)}
-        onConfirm={() => {
-          showToast(
-            `Tautan instruksi reset kata sandi telah dikirim ke ${memberToResetPassword?.email}.`,
-            'success'
-          );
-          setMemberToResetPassword(null);
+        onConfirm={async () => {
+          if (memberToResetPassword) {
+            await sendFirebasePasswordResetEmail(memberToResetPassword.email, {
+              name: memberToResetPassword.fullName,
+              phone: memberToResetPassword.phone,
+              membershipNumber: memberToResetPassword.membershipNumber,
+            });
+            showToast(
+              `Instruksi dan tautan reset kata sandi telah dikirim ke ${memberToResetPassword.email}.`,
+              'success'
+            );
+            setMemberToResetPassword(null);
+          }
         }}
         title="Reset Kata Sandi Member?"
-        message={`Kirimkan tautan reset kata sandi resmi hotel ke alamat email: ${memberToResetPassword?.email}?`}
+        message={`Kirimkan tautan dan instruksi reset kata sandi resmi hotel ke alamat email: ${memberToResetPassword?.email} (${memberToResetPassword?.fullName})?`}
         confirmText="Kirim Tautan Reset"
+      />
+
+      {/* Delete Member Dialog - Strictly SUPER ADMIN */}
+      <ConfirmDialog
+        isOpen={Boolean(memberToDelete)}
+        onClose={() => setMemberToDelete(null)}
+        onConfirm={() => {
+          if (memberToDelete) {
+            deleteMember(memberToDelete.id);
+            setMemberToDelete(null);
+          }
+        }}
+        title="Hapus Data Member Secara Permanen?"
+        message={`Apakah Anda yakin ingin menghapus data member "${memberToDelete?.fullName}" (${memberToDelete?.membershipNumber}) secara permanen? Seluruh riwayat poin dan akun login tamu ini akan dihapus dari sistem. Tindakan ini hanya dapat dilakukan oleh Super Admin.`}
+        confirmText="Hapus Permanen"
+        isDestructive={true}
       />
     </div>
   );

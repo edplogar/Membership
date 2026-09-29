@@ -408,6 +408,42 @@ export interface WhatsAppMessageLog {
   triggerPayload?: Record<string, unknown>;
 }
 
+export interface EmailSystemConfig {
+  defaultSenderEmail: string; // e.g. "membership@lombokgardenhotel.com" or "edp.logar@gmail.com"
+  defaultSenderName: string; // e.g. "Lombok Garden Hotel Concierge"
+  replyToEmail: string; // e.g. "guestservice@lombokgardenhotel.com"
+  provider: 'smtp' | 'gmail' | 'sendgrid' | 'resend' | 'custom';
+  smtpHost: string; // e.g. "smtp.gmail.com" or "mail.lombokgardenhotel.com"
+  smtpPort: number; // 465, 587, 25
+  smtpSecure: boolean;
+  smtpUser: string;
+  smtpPassword?: string;
+  apiKey?: string;
+  autoSendWelcomeEmail: boolean;
+  autoSendPasswordResetEmail: boolean;
+  welcomeSubjectTemplate: string;
+  welcomeBodyTemplate: string;
+  resetSubjectTemplate: string;
+  resetBodyTemplate: string;
+  lastTestedAt?: string;
+  testStatus?: 'success' | 'failed' | 'idle';
+}
+
+export interface EmailMessageLog {
+  id: string;
+  recipientEmail: string;
+  recipientName: string;
+  subject: string;
+  type: 'welcome' | 'password_reset' | 'test' | 'notification' | 'broadcast';
+  status: 'sent' | 'delivered' | 'failed' | 'queued';
+  senderEmail: string;
+  timestamp: string;
+  resetToken?: string;
+  otpCode?: string;
+  previewText?: string;
+  errorMessage?: string;
+}
+
 export interface IntegrationStatus {
   whatsappPing: { name: string; status: 'connected' | 'mock' | 'disconnected'; provider: string };
   emailService: { name: string; status: 'connected' | 'mock' | 'disconnected'; provider: string };

@@ -89,7 +89,7 @@ export const LoginPage: React.FC<LoginPageProps> = ({ onSuccess }) => {
       const params = new URLSearchParams(window.location.search);
       const modeParam = params.get('mode');
       const emailParam = params.get('email');
-      if (modeParam === 'resetPassword' || params.has('token') || params.has('resetToken')) {
+      if (modeParam === 'resetPassword' || params.has('token') || params.has('resetToken') || params.has('reset_token')) {
         setAuthMode('reset');
         if (emailParam) {
           setResetEmail(decodeURIComponent(emailParam));
@@ -202,7 +202,7 @@ export const LoginPage: React.FC<LoginPageProps> = ({ onSuccess }) => {
 
     const cleanInput = forgotIdentifier.trim();
     if (!cleanInput) {
-      setErrorMessage('Harap masukkan alamat email atau username akun Anda.');
+      setErrorMessage('Harap masukkan alamat email, username, nomor HP, atau nomor member Anda.');
       return;
     }
 
@@ -213,8 +213,12 @@ export const LoginPage: React.FC<LoginPageProps> = ({ onSuccess }) => {
       const targetEmail = found?.email || (cleanInput.includes('@') ? cleanInput : `${cleanInput.toLowerCase()}@lombokgardenhotel.com`);
       const targetName = found?.name || cleanInput;
 
-      // Dispatch Firebase Auth Password Reset Email Link
-      await sendFirebasePasswordResetEmail(targetEmail);
+      // Dispatch Firebase Auth Password Reset Email Link & Backend Dispatcher
+      const resetResult = await sendFirebasePasswordResetEmail(targetEmail, {
+        name: targetName,
+        phone: found?.phone,
+        membershipNumber: found?.membershipNumber,
+      });
 
       const token = 'rec_' + Math.random().toString(36).substring(2, 11) + Date.now().toString(36);
 
@@ -228,7 +232,7 @@ export const LoginPage: React.FC<LoginPageProps> = ({ onSuccess }) => {
       setResetEmail(targetEmail);
       setForgotSuccess(true);
       setResendCooldown(30);
-      showToast(`Tautan reset kata sandi telah dikirim ke ${targetEmail}`, 'success');
+      showToast(`Tautan dan instruksi reset kata sandi telah dikirim ke ${targetEmail}`, 'success');
     } catch (err: unknown) {
       const errText = err instanceof Error ? err.message : String(err);
       setErrorMessage(`Gagal memproses pemulihan: ${errText}`);

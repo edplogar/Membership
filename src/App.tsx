@@ -36,6 +36,7 @@ import { AdminUsersManagement } from './components/superadmin/AdminUsersManageme
 import { RolePermissionsMatrix } from './components/superadmin/RolePermissionsMatrix';
 import { SystemSettingsView } from './components/superadmin/SystemSettingsView';
 import { WhatsAppCRMHub } from './components/superadmin/WhatsAppCRMHub';
+import { EmailSystemHub } from './components/superadmin/EmailSystemHub';
 
 // Modals & Auth
 import { GlobalSearchModal } from './components/common/GlobalSearchModal';
@@ -46,11 +47,6 @@ import { LombokGardenLogo } from './components/common/LombokGardenLogo';
 function MainApp() {
   const { currentUser, currentMember, userRole } = useAuth();
   const { tiers, members } = useApp();
-
-  // If user is not authenticated, show Multi-User LoginPage
-  if (!currentUser) {
-    return <LoginPage />;
-  }
 
   // Active navigation tab
   const [activeTab, setActiveTab] = useState<string>(() =>
@@ -70,7 +66,7 @@ function MainApp() {
     } else if (userRole === 'SUPER_ADMIN' && activeTab === 'dashboard') {
       setActiveTab('super_dashboard');
     }
-  }, [userRole]);
+  }, [userRole, activeTab]);
 
   // Global modals state
   const [isScannerOpen, setIsScannerOpen] = useState(false);
@@ -112,6 +108,11 @@ function MainApp() {
   const handleViewProfileMember = (member: Member) => {
     setSelectedMemberForDetail(member);
   };
+
+  // If user is not authenticated, show Multi-User LoginPage (after all hooks)
+  if (!currentUser) {
+    return <LoginPage />;
+  }
 
   const memberToDisplay = currentMember || members[0];
   const currentTier = tiers.find((t) => t.id === memberToDisplay?.tierId) || tiers[0];
@@ -267,6 +268,7 @@ function MainApp() {
             {activeTab === 'super_admins' && <AdminUsersManagement />}
             {activeTab === 'super_roles' && <RolePermissionsMatrix />}
             {activeTab === 'super_whatsapp' && <WhatsAppCRMHub />}
+            {activeTab === 'super_email' && <EmailSystemHub onNavigate={setActiveTab} />}
             {activeTab === 'admin_tiers' && (
               <div className="space-y-12">
                 <TierManagement />

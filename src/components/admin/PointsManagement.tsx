@@ -3,6 +3,7 @@ import { useApp } from '../../context/AppContext';
 import { Member } from '../../types';
 import { formatIDR, formatDateIndo } from '../../services/membershipEngine';
 import { Modal } from '../common/Modal';
+import { MemberSearchSelect } from '../common/MemberSearchSelect';
 import { Coins, Plus, Minus, Settings, ShieldAlert, History } from 'lucide-react';
 
 interface PointsManagementProps {
@@ -225,24 +226,17 @@ export const PointsManagement: React.FC<PointsManagementProps> = ({
       >
         <form onSubmit={handleAdjustSubmit} className="space-y-4">
           <div>
-            <label className="block text-xs font-semibold text-stone-700 mb-1">
-              Pilih Member Tamu *
-            </label>
-            <select
-              value={adjustForm.memberId}
-              onChange={(e) =>
-                setAdjustForm({ ...adjustForm, memberId: e.target.value })
+            <MemberSearchSelect
+              members={members}
+              tiers={[]}
+              selectedMemberId={adjustForm.memberId}
+              onSelectMember={(m) =>
+                setAdjustForm({ ...adjustForm, memberId: m.id })
               }
-              className="w-full px-3 py-2 bg-stone-50 border border-stone-200 rounded-xl text-xs font-medium"
+              label="Pilih & Cari Member Tamu"
+              placeholder="Cari nama member, no. kartu, atau no. HP..."
               required
-            >
-              {members.map((m) => (
-                <option key={m.id} value={m.id}>
-                  {m.fullName} ({m.membershipNumber}) — Saldo Saat Ini:{' '}
-                  {m.availablePoints} pts
-                </option>
-              ))}
-            </select>
+            />
           </div>
 
           <div className="grid grid-cols-2 gap-4">

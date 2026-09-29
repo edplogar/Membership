@@ -23,6 +23,7 @@ import {
   ExternalLink,
   Copy,
   Coins,
+  Mail,
 } from 'lucide-react';
 import {
   sendWhatsAppMessageViaPing,
@@ -617,6 +618,29 @@ export const SuperAdminControlCenter: React.FC<SuperAdminControlCenterProps> = (
             <div className="mt-4 pt-3 border-t border-stone-100 flex items-center justify-between text-[11px] text-emerald-800 font-semibold">
               <span>Integrasi ping.co.id Aktif</span>
               <span>Buka Dasbor Lengkap →</span>
+            </div>
+          </div>
+
+          {/* 2. Email Gateway & Reset Password Settings */}
+          <div
+            onClick={() => onNavigate('super_email')}
+            className="p-5 bg-white rounded-2xl border-2 border-[#00A651]/40 hover:border-[#00A651] hover:shadow-md transition-all cursor-pointer group flex flex-col justify-between"
+          >
+            <div>
+              <div className="w-10 h-10 rounded-xl bg-emerald-50 text-[#00A651] flex items-center justify-center mb-3 group-hover:scale-105 transition-transform">
+                <Mail className="w-5 h-5" />
+              </div>
+              <h3 className="font-bold text-sm text-stone-900 group-hover:text-emerald-900 transition-colors flex items-center justify-between">
+                <span>Pengaturan Email & Reset Password</span>
+                <ArrowRight className="w-4 h-4 text-stone-400 group-hover:translate-x-1 transition-transform" />
+              </h3>
+              <p className="text-xs text-stone-500 mt-1 leading-relaxed">
+                Atur email default pengirim, server SMTP, pengiriman email otomatis saat member baru daftar, dan sistem reset password via email.
+              </p>
+            </div>
+            <div className="mt-4 pt-3 border-t border-stone-100 flex items-center justify-between text-[11px] text-[#00A651] font-semibold">
+              <span>Email Member & Reset Aktif</span>
+              <span>Buka Pengaturan Email →</span>
             </div>
           </div>
 

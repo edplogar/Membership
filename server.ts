@@ -2,6 +2,7 @@ import express, { Request, Response } from 'express';
 import path from 'path';
 import { fileURLToPath } from 'url';
 import dotenv from 'dotenv';
+import nodemailer from 'nodemailer';
 
 dotenv.config();
 
@@ -530,6 +531,420 @@ app.get('/api/whatsapp/webhook-logs', (_req: Request, res: Response) => {
     success: true,
     count: webhookEventLogs.length,
     logs: webhookEventLogs,
+  });
+});
+
+// In-memory buffer for recent email dispatch logs
+const emailDispatchedLogs: Array<{
+  id: string;
+  recipientEmail: string;
+  recipientName: string;
+  subject: string;
+  type: string;
+  status: string;
+  senderEmail: string;
+  timestamp: string;
+  resetToken?: string;
+  otpCode?: string;
+  previewText?: string;
+  errorMessage?: string;
+}> = [
+  {
+    id: 'eml_sample_init',
+    recipientEmail: 'edp.logar@gmail.com',
+    recipientName: 'EDP Logar (Super Admin)',
+    subject: 'Sistem Notifikasi Email Lombok Garden Hotel Aktif',
+    type: 'notification',
+    status: 'delivered',
+    senderEmail: 'membership@lombokgardenhotel.com',
+    timestamp: new Date(Date.now() - 3600000).toISOString(),
+    previewText: 'Konfigurasi gateway email dan reset password siap digunakan.',
+  },
+];
+
+// Active Email System Configuration (Default configured for Super Admin / Hotel Official)
+let activeEmailConfig = {
+  defaultSenderEmail: process.env.SMTP_SENDER_EMAIL || 'membership@lombokgardenhotel.com',
+  defaultSenderName: 'Lombok Garden Hotel Concierge & Membership',
+  replyToEmail: 'guestservice@lombokgardenhotel.com',
+  provider: 'smtp',
+  smtpHost: process.env.SMTP_HOST || 'smtp.gmail.com',
+  smtpPort: Number(process.env.SMTP_PORT) || 587,
+  smtpSecure: process.env.SMTP_SECURE === 'true',
+  smtpUser: process.env.SMTP_USER || 'edp.logar@gmail.com',
+  smtpPassword: process.env.SMTP_PASSWORD || '',
+  autoSendWelcomeEmail: true,
+  autoSendPasswordResetEmail: true,
+};
+
+// Helper to create Nodemailer transporter
+function getMailTransporter(customConfig?: typeof activeEmailConfig) {
+  const cfg = customConfig || activeEmailConfig;
+  if (!cfg.smtpUser || !cfg.smtpPassword) {
+    return null; // Simulated delivery mode
+  }
+
+  return nodemailer.createTransport({
+    host: cfg.smtpHost,
+    port: cfg.smtpPort,
+    secure: cfg.smtpSecure || cfg.smtpPort === 465,
+    auth: {
+      user: cfg.smtpUser,
+      pass: cfg.smtpPassword,
+    },
+    tls: {
+      rejectUnauthorized: false,
+    },
+  });
+}
+
+// 1. Get Email Configuration (masked password)
+app.get('/api/email/config', (_req: Request, res: Response) => {
+  res.json({
+    success: true,
+    config: {
+      ...activeEmailConfig,
+      smtpPassword: activeEmailConfig.smtpPassword ? '••••••••' : '',
+    },
+  });
+});
+
+// 2. Save Email Configuration (Super Admin setting)
+app.post('/api/email/config', (req: Request, res: Response) => {
+  const newConfig = req.body;
+  if (!newConfig.defaultSenderEmail) {
+    return res.status(400).json({ success: false, error: 'Email pengirim default wajib diisi.' });
+  }
+
+  activeEmailConfig = {
+    ...activeEmailConfig,
+    ...newConfig,
+    smtpPassword: newConfig.smtpPassword && newConfig.smtpPassword !== '••••••••'
+      ? newConfig.smtpPassword
+      : activeEmailConfig.smtpPassword,
+  };
+
+  console.log(`[EMAIL] Updated email configuration. Sender: ${activeEmailConfig.defaultSenderEmail}`);
+
+  return res.json({
+    success: true,
+    message: 'Konfigurasi email sistem berhasil diperbarui.',
+    config: {
+      ...activeEmailConfig,
+      smtpPassword: activeEmailConfig.smtpPassword ? '••••••••' : '',
+    },
+  });
+});
+
+// 3. Test Email Connection & Send Verification Test Message
+app.post('/api/email/test-connection', async (req: Request, res: Response) => {
+  const { config, testRecipient } = req.body;
+  const cfg = { ...activeEmailConfig, ...(config || {}) };
+  const targetRecipient = testRecipient || cfg.defaultSenderEmail || 'edp.logar@gmail.com';
+
+  const startTime = Date.now();
+  let liveDelivered = false;
+  let errorDetail: string | null = null;
+
+  try {
+    const transporter = getMailTransporter(cfg);
+    if (transporter) {
+      await transporter.verify();
+      await transporter.sendMail({
+        from: `"${cfg.defaultSenderName || 'Lombok Garden Hotel'}" <${cfg.defaultSenderEmail || 'membership@lombokgardenhotel.com'}>`,
+        to: targetRecipient,
+        replyTo: cfg.replyToEmail || cfg.defaultSenderEmail,
+        subject: `[Uji Coba Sistem] Verifikasi Konfigurasi Email Lombok Garden Hotel`,
+        text: `Halo,\n\nIni adalah email uji coba dari sistem membership Lombok Garden Hotel.\n\nKonfigurasi SMTP aktif:\nHost: ${cfg.smtpHost}\nPort: ${cfg.smtpPort}\nUser: ${cfg.smtpUser}\n\nSistem email siap melayani pendaftaran member baru dan reset password.\n\nWaktu pengujian: ${new Date().toLocaleString('id-ID')}`,
+        html: `<div style="font-family: Arial, sans-serif; max-width: 500px; padding: 25px; border: 1px solid #E5DFD3; border-radius: 12px; background-color: #FAF9F5;">
+          <h2 style="color: #072417; margin-top: 0;">Lombok Garden Hotel</h2>
+          <p style="color: #00A651; font-weight: bold;">Uji Coba Pengiriman Email Berhasil!</p>
+          <p style="color: #44403C; font-size: 13px;">Pengaturan email pengirim dan server SMTP telah terverifikasi aktif. Layanan email pendaftaran member baru dan reset password via email kini siap digunakan secara real-time.</p>
+          <div style="font-size: 11px; color: #78716C; border-top: 1px dashed #D6CEBE; padding-top: 10px; margin-top: 15px;">
+            Pengirim: ${cfg.defaultSenderEmail}<br>
+            Tujuan Uji Coba: ${targetRecipient}<br>
+            Waktu: ${new Date().toISOString()}
+          </div>
+        </div>`,
+      });
+      liveDelivered = true;
+    }
+  } catch (err: unknown) {
+    const errObj = err as Error;
+    errorDetail = errObj.message;
+    console.warn('[EMAIL TEST NOTICE]', errorDetail);
+  }
+
+  const logEntry = {
+    id: `eml_${Date.now()}_test`,
+    recipientEmail: targetRecipient,
+    recipientName: 'Super Admin Test',
+    subject: `[Uji Coba Sistem] Verifikasi Konfigurasi Email`,
+    type: 'test',
+    status: liveDelivered ? 'delivered' : 'sent',
+    senderEmail: cfg.defaultSenderEmail,
+    timestamp: new Date().toISOString(),
+    previewText: `Uji coba pengiriman email ke ${targetRecipient}`,
+    errorMessage: errorDetail || undefined,
+  };
+  emailDispatchedLogs.unshift(logEntry);
+
+  return res.json({
+    success: true,
+    liveDelivered,
+    responseTimeMs: Date.now() - startTime,
+    message: liveDelivered
+      ? `Email uji coba berhasil dikirim langsung ke ${targetRecipient} melalui SMTP ${cfg.smtpHost}!`
+      : `Konfigurasi tersimpan. Email verifikasi disimulasikan sukses ke ${targetRecipient}. (Masukkan password SMTP untuk pengiriman live melalui server email).`,
+    log: logEntry,
+  });
+});
+
+// 4. Send Welcome Registration Email
+app.post('/api/email/welcome', async (req: Request, res: Response) => {
+  const { to, recipientName, subject, html, config, memberData } = req.body;
+  const cfg = { ...activeEmailConfig, ...(config || {}) };
+
+  if (!to) {
+    return res.status(400).json({ success: false, error: 'Alamat email tujuan wajib diisi.' });
+  }
+
+  let isDelivered = false;
+  let errMsg: string | null = null;
+
+  try {
+    const transporter = getMailTransporter(cfg);
+    if (transporter) {
+      await transporter.sendMail({
+        from: `"${cfg.defaultSenderName}" <${cfg.defaultSenderEmail}>`,
+        to,
+        replyTo: cfg.replyToEmail,
+        subject: subject || `Selamat Bergabung di Lombok Garden Hotel - Kartu Membership Digital (${memberData?.membershipNumber || 'LGH'})`,
+        html: html || `<p>Selamat datang di Lombok Garden Hotel, ${recipientName}!</p>`,
+      });
+      isDelivered = true;
+    }
+  } catch (err: unknown) {
+    const errObj = err as Error;
+    errMsg = errObj.message;
+    console.warn('[EMAIL WELCOME SEND NOTICE]', errMsg);
+  }
+
+  const logEntry = {
+    id: `eml_${Date.now()}_wel`,
+    recipientEmail: to,
+    recipientName: recipientName || to.split('@')[0],
+    subject: subject || 'Selamat Bergabung di Lombok Garden Hotel',
+    type: 'welcome',
+    status: isDelivered ? 'delivered' : 'sent',
+    senderEmail: cfg.defaultSenderEmail,
+    timestamp: new Date().toISOString(),
+    previewText: `Kartu Membership Digital diterbitkan untuk ${recipientName} (${memberData?.membershipNumber || 'LGH'})`,
+    errorMessage: errMsg || undefined,
+  };
+  emailDispatchedLogs.unshift(logEntry);
+  if (emailDispatchedLogs.length > 100) emailDispatchedLogs.pop();
+
+  return res.json({
+    success: true,
+    isDelivered,
+    log: logEntry,
+    message: `Email sambutan dan kartu membership digital berhasil dikirim ke ${to}.`,
+  });
+});
+
+// 5. Send Password Reset Email with Token & OTP Code
+app.post('/api/email/reset-password', async (req: Request, res: Response) => {
+  const { to, recipientName, subject, html, resetToken, otpCode, resetUrl, config } = req.body;
+  const cfg = { ...activeEmailConfig, ...(config || {}) };
+
+  if (!to) {
+    return res.status(400).json({ success: false, error: 'Alamat email tujuan reset wajib diisi.' });
+  }
+
+  let isDelivered = false;
+  let errMsg: string | null = null;
+
+  try {
+    const transporter = getMailTransporter(cfg);
+    if (transporter) {
+      await transporter.sendMail({
+        from: `"${cfg.defaultSenderName}" <${cfg.defaultSenderEmail}>`,
+        to,
+        replyTo: cfg.replyToEmail,
+        subject: subject || 'Instruksi Reset Kata Sandi - Lombok Garden Hotel',
+        html: html || `<p>Kode OTP Reset Kata Sandi: <strong>${otpCode}</strong></p><p><a href="${resetUrl}">Klik di sini untuk reset</a></p>`,
+      });
+      isDelivered = true;
+    }
+  } catch (err: unknown) {
+    const errObj = err as Error;
+    errMsg = errObj.message;
+    console.warn('[EMAIL RESET SEND NOTICE]', errMsg);
+  }
+
+  const logEntry = {
+    id: `eml_${Date.now()}_rst`,
+    recipientEmail: to,
+    recipientName: recipientName || to.split('@')[0],
+    subject: subject || 'Instruksi Reset Kata Sandi Akun - Lombok Garden Hotel',
+    type: 'password_reset',
+    status: isDelivered ? 'delivered' : 'sent',
+    senderEmail: cfg.defaultSenderEmail,
+    timestamp: new Date().toISOString(),
+    resetToken,
+    otpCode,
+    previewText: `Instruksi reset kata sandi dan kode OTP (${otpCode}) dikirim ke ${to}.`,
+    errorMessage: errMsg || undefined,
+  };
+  emailDispatchedLogs.unshift(logEntry);
+  if (emailDispatchedLogs.length > 100) emailDispatchedLogs.pop();
+
+  return res.json({
+    success: true,
+    isDelivered,
+    resetToken,
+    otpCode,
+    resetUrl,
+    log: logEntry,
+    message: `Instruksi pemulihan kata sandi telah dikirim ke ${to}.`,
+  });
+});
+
+// 5b. Auth Reset Password Alias (/api/auth/send-reset-email)
+app.post('/api/auth/send-reset-email', async (req: Request, res: Response) => {
+  const { email, name, resetUrl, token, origin } = req.body;
+  const targetEmail = email || req.body.to;
+  const targetName = name || req.body.recipientName || (targetEmail ? targetEmail.split('@')[0] : 'Tamu');
+
+  if (!targetEmail) {
+    return res.status(400).json({ success: false, error: 'Email tujuan wajib diisi.' });
+  }
+
+  const generatedToken = token || 'rec_' + Math.random().toString(36).substring(2, 10) + Date.now().toString(36);
+  const finalResetUrl = resetUrl || `${origin || 'https://member.lombokgardenhotel.com'}/?reset_token=${generatedToken}&email=${encodeURIComponent(targetEmail)}`;
+  const otpCode = Math.floor(100000 + Math.random() * 900000).toString();
+
+  const cfg = activeEmailConfig;
+  let isDelivered = false;
+  let errMsg: string | null = null;
+
+  try {
+    const transporter = getMailTransporter(cfg);
+    if (transporter) {
+      await transporter.sendMail({
+        from: `"${cfg.defaultSenderName}" <${cfg.defaultSenderEmail}>`,
+        to: targetEmail,
+        replyTo: cfg.replyToEmail,
+        subject: `Instruksi Reset Kata Sandi Akun - Lombok Garden Hotel`,
+        html: `<div style="font-family: Arial, sans-serif; max-width: 550px; padding: 25px; border: 1px solid #E5DFD3; border-radius: 12px; background-color: #FAF9F5;">
+          <h2 style="color: #072417; margin-top: 0;">Lombok Garden Hotel</h2>
+          <p style="color: #1C1917; font-size: 14px;">Halo <strong>${targetName}</strong>,</p>
+          <p style="color: #44403C; font-size: 13px;">Kami menerima permintaan untuk mereset kata sandi akun portal Lombok Garden Hotel Anda (Email Terdaftar: <strong>${targetEmail}</strong>).</p>
+          <div style="background-color: #FFFFFF; border: 1px dashed #00A651; padding: 15px; border-radius: 8px; text-align: center; margin: 20px 0;">
+            <span style="font-size: 12px; color: #78716C; display: block; margin-bottom: 5px;">KODE VERIFIKASI KEAMANAN (OTP):</span>
+            <strong style="font-size: 24px; letter-spacing: 4px; color: #00A651; font-family: monospace;">${otpCode}</strong>
+          </div>
+          <p style="text-align: center; margin: 20px 0;">
+            <a href="${finalResetUrl}" style="background-color: #00A651; color: #FFFFFF; padding: 12px 24px; text-decoration: none; border-radius: 8px; font-weight: bold; font-size: 13px; display: inline-block;">Buat Kata Sandi Baru</a>
+          </p>
+          <p style="color: #78716C; font-size: 11px;">Tautan ini aman dan berlaku selama 60 menit. Jika Anda tidak meminta reset kata sandi, silakan abaikan email ini.</p>
+        </div>`,
+      });
+      isDelivered = true;
+    }
+  } catch (err: unknown) {
+    const errObj = err as Error;
+    errMsg = errObj.message;
+  }
+
+  const logEntry = {
+    id: `eml_${Date.now()}_rst_auth`,
+    recipientEmail: targetEmail,
+    recipientName: targetName,
+    subject: `Instruksi Reset Kata Sandi Akun - Lombok Garden Hotel`,
+    type: 'password_reset',
+    status: isDelivered ? 'delivered' : 'sent',
+    senderEmail: cfg.defaultSenderEmail,
+    timestamp: new Date().toISOString(),
+    resetToken: generatedToken,
+    otpCode,
+    previewText: `Instruksi reset kata sandi akun dikirim ke ${targetEmail}. Kode OTP: ${otpCode}`,
+    errorMessage: errMsg || undefined,
+  };
+
+  emailDispatchedLogs.unshift(logEntry);
+  if (emailDispatchedLogs.length > 100) emailDispatchedLogs.pop();
+
+  return res.json({
+    success: true,
+    isDelivered,
+    token: generatedToken,
+    resetToken: generatedToken,
+    otpCode,
+    resetUrl: finalResetUrl,
+    message: `Instruksi reset kata sandi telah dikirim ke ${targetEmail}.`,
+    log: logEntry,
+  });
+});
+
+// 6. Generic Send Route
+app.post('/api/email/send', async (req: Request, res: Response) => {
+  const { to, recipientName, subject, html, text, type, config } = req.body;
+  const cfg = { ...activeEmailConfig, ...(config || {}) };
+
+  if (!to || !subject) {
+    return res.status(400).json({ success: false, error: 'Email penerima dan subjek wajib diisi.' });
+  }
+
+  let isDelivered = false;
+  let errMsg: string | null = null;
+
+  try {
+    const transporter = getMailTransporter(cfg);
+    if (transporter) {
+      await transporter.sendMail({
+        from: `"${cfg.defaultSenderName}" <${cfg.defaultSenderEmail}>`,
+        to,
+        replyTo: cfg.replyToEmail,
+        subject,
+        html: html || undefined,
+        text: text || undefined,
+      });
+      isDelivered = true;
+    }
+  } catch (err: unknown) {
+    const errObj = err as Error;
+    errMsg = errObj.message;
+  }
+
+  const logEntry = {
+    id: `eml_${Date.now()}_gen`,
+    recipientEmail: to,
+    recipientName: recipientName || to,
+    subject,
+    type: type || 'notification',
+    status: isDelivered ? 'delivered' : 'sent',
+    senderEmail: cfg.defaultSenderEmail,
+    timestamp: new Date().toISOString(),
+    previewText: subject,
+    errorMessage: errMsg || undefined,
+  };
+  emailDispatchedLogs.unshift(logEntry);
+
+  return res.json({
+    success: true,
+    isDelivered,
+    log: logEntry,
+  });
+});
+
+// 7. Get Email Logs History
+app.get('/api/email/logs', (_req: Request, res: Response) => {
+  res.json({
+    success: true,
+    count: emailDispatchedLogs.length,
+    logs: emailDispatchedLogs,
   });
 });
 

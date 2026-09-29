@@ -1,8 +1,10 @@
 import React, { useState } from 'react';
 import { Member, MembershipTier } from '../../types';
 import { useApp } from '../../context/AppContext';
+import { useAuth } from '../../context/AuthContext';
 import { formatIDR, formatDateIndo } from '../../services/membershipEngine';
 import { Modal } from '../common/Modal';
+import { ConfirmDialog } from '../common/ConfirmDialog';
 import { QRCodeView } from '../common/QRCodeView';
 import {
   User,
@@ -18,6 +20,7 @@ import {
   MapPin,
   Calendar,
   CheckCircle,
+  Trash2,
 } from 'lucide-react';
 
 interface MemberDetailModalProps {
@@ -39,8 +42,10 @@ export const MemberDetailModal: React.FC<MemberDetailModalProps> = ({
   onActionAdjustPoints,
   onActionChangeTier,
 }) => {
-  const { tiers, stays, transactions, pointTransactions, redemptions } = useApp();
+  const { tiers, stays, transactions, pointTransactions, redemptions, deleteMember } = useApp();
+  const { userRole } = useAuth();
   const [activeTab, setActiveTab] = useState<'profile' | 'stays' | 'spending' | 'loyalty' | 'timeline'>('profile');
+  const [isConfirmDeleteOpen, setIsConfirmDeleteOpen] = useState(false);
 
   if (!member) return null;
 
@@ -116,6 +121,19 @@ export const MemberDetailModal: React.FC<MemberDetailModalProps> = ({
                 className="px-3 py-1.5 bg-stone-800 hover:bg-stone-700 text-stone-200 rounded-lg text-xs font-semibold border border-stone-700 transition-colors"
               >
                 Ubah Tier
+              </button>
+            )}
+
+            {/* Super Admin Permanent Delete Action */}
+            {userRole === 'SUPER_ADMIN' && (
+              <button
+                type="button"
+                onClick={() => setIsConfirmDeleteOpen(true)}
+                className="px-3 py-1.5 bg-rose-600/20 hover:bg-rose-600 text-rose-300 hover:text-white rounded-lg text-xs font-semibold border border-rose-500/40 transition-colors flex items-center gap-1.5 cursor-pointer"
+                title="Hapus data member permanen"
+              >
+                <Trash2 className="w-3.5 h-3.5" />
+                <span>Hapus Member</span>
               </button>
             )}
           </div>
@@ -455,6 +473,21 @@ export const MemberDetailModal: React.FC<MemberDetailModalProps> = ({
           </div>
         )}
       </div>
+
+      {/* Delete Member Confirmation Dialog (SUPER ADMIN ONLY) */}
+      <ConfirmDialog
+        isOpen={isConfirmDeleteOpen}
+        onClose={() => setIsConfirmDeleteOpen(false)}
+        onConfirm={() => {
+          deleteMember(member.id);
+          setIsConfirmDeleteOpen(false);
+          onClose();
+        }}
+        title="Hapus Data Member Permanen?"
+        message={`Apakah Anda yakin ingin menghapus data member "${member.fullName}" (${member.membershipNumber}) secara permanen? Seluruh riwayat transaksi, poin, dan akun login akan dihapus.`}
+        confirmText="Hapus Permanen"
+        isDestructive={true}
+      />
     </Modal>
   );
 };

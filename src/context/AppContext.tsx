@@ -22,6 +22,8 @@ import {
   PermissionCode,
   PingCoIdWhatsAppConfig,
   WhatsAppMessageLog,
+  EmailSystemConfig,
+  EmailMessageLog,
 } from '../types';
 import {
   INITIAL_MEMBERS,
@@ -53,6 +55,13 @@ import {
   formatPointsWhatsApp,
   formatTierUpgradeWhatsApp,
 } from '../services/pingWhatsAppService';
+import {
+  INITIAL_EMAIL_CONFIG,
+  INITIAL_EMAIL_LOGS,
+  sendWelcomeEmail,
+  sendPasswordResetEmail,
+  testEmailConnection,
+} from '../services/emailService';
 import {
   calculatePointsEarned,
   evaluateMemberTierRules,
@@ -99,11 +108,13 @@ interface AppContextValue {
   roles: Role[];
   whatsappConfig: PingCoIdWhatsAppConfig;
   whatsappLogs: WhatsAppMessageLog[];
+  emailConfig: EmailSystemConfig;
+  emailLogs: EmailMessageLog[];
 
   // Actions
   addMember: (data: Omit<Member, 'id' | 'membershipNumber' | 'totalVisits' | 'totalTransactions' | 'totalSpending' | 'totalPointsEarned' | 'availablePoints' | 'redeemedPoints'>) => Member;
   updateMember: (id: string, updates: Partial<Member>) => void;
-  deleteMember: (id: string) => void;
+  deleteMember: (id: string) => boolean;
   changeMemberTier: (memberId: string, newTierId: string, reason: string) => void;
   
   recordStay: (data: Omit<Stay, 'id'>) => Stay;
@@ -139,6 +150,9 @@ interface AppContextValue {
   
   updateWhatsAppConfig: (config: Partial<PingCoIdWhatsAppConfig>) => void;
   addWhatsAppLog: (log: WhatsAppMessageLog) => void;
+  updateEmailConfig: (config: Partial<EmailSystemConfig>) => void;
+  addEmailLog: (log: EmailMessageLog) => void;
+  sendTestEmailToRecipient: (recipientEmail: string) => Promise<{ success: boolean; message: string }>;
 
   updateRolePermissions: (roleId: string, permissions: PermissionCode[]) => void;
   saveUser: (user: User) => void;
@@ -176,6 +190,8 @@ export function AppProvider({ children }: { children: ReactNode }) {
   const [roles, setRoles] = useState<Role[]>(() => loadFromStorage('roles', INITIAL_ROLES));
   const [whatsappConfig, setWhatsappConfig] = useState<PingCoIdWhatsAppConfig>(() => loadFromStorage('whatsappConfig', INITIAL_PING_CONFIG));
   const [whatsappLogs, setWhatsappLogs] = useState<WhatsAppMessageLog[]>(() => loadFromStorage('whatsappLogs', INITIAL_WHATSAPP_LOGS));
+  const [emailConfig, setEmailConfig] = useState<EmailSystemConfig>(() => loadFromStorage('emailConfig', INITIAL_EMAIL_CONFIG));
+  const [emailLogs, setEmailLogs] = useState<EmailMessageLog[]>(() => loadFromStorage('emailLogs', INITIAL_EMAIL_LOGS));
 
   // Test Firestore Connection on Boot
   useEffect(() => {
@@ -203,6 +219,8 @@ export function AppProvider({ children }: { children: ReactNode }) {
   useEffect(() => saveToStorage('roles', roles), [roles]);
   useEffect(() => saveToStorage('whatsappConfig', whatsappConfig), [whatsappConfig]);
   useEffect(() => saveToStorage('whatsappLogs', whatsappLogs), [whatsappLogs]);
+  useEffect(() => saveToStorage('emailConfig', emailConfig), [emailConfig]);
+  useEffect(() => saveToStorage('emailLogs', emailLogs), [emailLogs]);
 
   // Firestore Real-time Listeners (multi-account synchronization)
   useEffect(() => {
@@ -289,6 +307,28 @@ export function AppProvider({ children }: { children: ReactNode }) {
         (error) => handleFirestoreError(error, OperationType.GET, 'system_settings/whatsapp_ping')
       );
 
+      const unsubEmailConfig = onSnapshot(
+        doc(db, 'system_settings', 'email_config'),
+        (docSnap) => {
+          if (docSnap.exists()) {
+            setEmailConfig(docSnap.data() as EmailSystemConfig);
+          }
+        },
+        (error) => handleFirestoreError(error, OperationType.GET, 'system_settings/email_config')
+      );
+
+      const unsubEmailLogs = onSnapshot(
+        collection(db, 'email_logs'),
+        (snapshot) => {
+          if (!snapshot.empty) {
+            const list: EmailMessageLog[] = [];
+            snapshot.forEach((docSnap) => list.push(docSnap.data() as EmailMessageLog));
+            setEmailLogs(list);
+          }
+        },
+        (error) => handleFirestoreError(error, OperationType.GET, 'email_logs')
+      );
+
       return () => {
         unsubMembers();
         unsubStays();
@@ -297,6 +337,8 @@ export function AppProvider({ children }: { children: ReactNode }) {
         unsubTiers();
         unsubWALogs();
         unsubWAPingConfig();
+        unsubEmailConfig();
+        unsubEmailLogs();
       };
     } catch {
       // Offline fallback
@@ -345,6 +387,14 @@ export function AppProvider({ children }: { children: ReactNode }) {
     );
     setNotifications((prev) => [welcomeNotif, ...prev]);
 
+    // Trigger Welcome Email to member's registered email address
+    if (emailConfig.autoSendWelcomeEmail && newMember.email) {
+      const currentTier = tiers.find((t) => t.id === newMember.tierId) || tiers[0];
+      sendWelcomeEmail(newMember, currentTier, emailConfig)
+        .then((log) => addEmailLog(log))
+        .catch(() => {});
+    }
+
     // Trigger WhatsApp welcome message via ping.co.id if enabled
     if (whatsappConfig.autoSendWelcomeCard && newMember.phone) {
       const currentTier = tiers.find((t) => t.id === newMember.tierId) || tiers[0];
@@ -387,18 +437,43 @@ export function AppProvider({ children }: { children: ReactNode }) {
     showToast('Data member berhasil diperbarui.', 'success');
   };
 
-  // Delete Member
-  const deleteMember = (id: string) => {
-    const existing = members.find((m) => m.id === id);
-    if (!existing) return;
+  // Delete Member (Strictly for SUPER_ADMIN role)
+  const deleteMember = (id: string): boolean => {
+    if (currentUser?.role !== 'SUPER_ADMIN') {
+      showToast('Akses Ditolak: Hanya Super Admin yang memiliki wewenang untuk menghapus data member.', 'error');
+      return false;
+    }
 
+    const existing = members.find((m) => m.id === id);
+    if (!existing) return false;
+
+    // Remove from local and firestore members collection
     setMembers((prev) => prev.filter((m) => m.id !== id));
     try {
       deleteDoc(doc(db, 'members', id)).catch(() => {});
     } catch {}
 
-    logAudit('DELETE_MEMBER', 'MEMBERS', id, existing.fullName, 'DELETED');
-    showToast(`Member ${existing.fullName} telah dihapus.`, 'info');
+    // Clean up linked user login credentials if any exist
+    const linkedUsers = users.filter((u) => u.memberId === id || u.email.toLowerCase() === existing.email.toLowerCase());
+    if (linkedUsers.length > 0) {
+      setUsers((prev) => prev.filter((u) => u.memberId !== id && u.email.toLowerCase() !== existing.email.toLowerCase()));
+      try {
+        linkedUsers.forEach((lu) => {
+          deleteDoc(doc(db, 'users', lu.id)).catch(() => {});
+        });
+      } catch {}
+    }
+
+    logAudit(
+      'DELETE_MEMBER_PERMANENT',
+      'MEMBERS',
+      id,
+      `Member: ${existing.fullName} (${existing.membershipNumber}), Email: ${existing.email}, HP: ${existing.phone}`,
+      'DELETED_BY_SUPER_ADMIN'
+    );
+
+    showToast(`Data member ${existing.fullName} (${existing.membershipNumber}) berhasil dihapus permanen.`, 'success');
+    return true;
   };
 
   // Change Tier manually
@@ -955,6 +1030,45 @@ export function AppProvider({ children }: { children: ReactNode }) {
     } catch {}
   };
 
+  // Email System Configuration (Super Admin Settings)
+  const updateEmailConfig = (config: Partial<EmailSystemConfig>) => {
+    setEmailConfig((prev) => {
+      const updated = { ...prev, ...config };
+      try {
+        setDoc(doc(db, 'system_settings', 'email_config'), updated).catch(() => {});
+      } catch {}
+      // Also update backend server config
+      fetch('/api/email/config', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(updated),
+      }).catch(() => {});
+      return updated;
+    });
+    logAudit('UPDATE_EMAIL_CONFIG', 'GATEWAY', config.defaultSenderEmail || 'Email System', 'Updated', JSON.stringify(config));
+    showToast('Pengaturan email pengirim & SMTP berhasil disimpan.', 'success');
+  };
+
+  const addEmailLog = (log: EmailMessageLog) => {
+    setEmailLogs((prev) => [log, ...prev]);
+    try {
+      setDoc(doc(db, 'email_logs', log.id), log).catch(() => {});
+    } catch {}
+  };
+
+  const sendTestEmailToRecipient = async (recipientEmail: string): Promise<{ success: boolean; message: string }> => {
+    const result = await testEmailConnection(emailConfig, recipientEmail);
+    if (result.log) {
+      addEmailLog(result.log);
+    }
+    if (result.success) {
+      showToast(result.message, 'success');
+    } else {
+      showToast(result.message, 'error');
+    }
+    return result;
+  };
+
   // Role Permissions
   const updateRolePermissions = (roleId: string, permissions: PermissionCode[]) => {
     setRoles((prev) =>
@@ -1043,6 +1157,8 @@ export function AppProvider({ children }: { children: ReactNode }) {
         roles,
         whatsappConfig,
         whatsappLogs,
+        emailConfig,
+        emailLogs,
         addMember,
         updateMember,
         deleteMember,
@@ -1070,6 +1186,9 @@ export function AppProvider({ children }: { children: ReactNode }) {
         updateSystemSettings,
         updateWhatsAppConfig,
         addWhatsAppLog,
+        updateEmailConfig,
+        addEmailLog,
+        sendTestEmailToRecipient,
         updateRolePermissions,
         saveUser,
         deleteUser,

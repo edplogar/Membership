@@ -41,7 +41,14 @@ interface AuthContextValue {
   }) => void;
   updateAdministrator: (userId: string, updates: Partial<User>) => void;
   refreshMemberData: (member: Member) => void;
-  findAccountByIdentifier: (identifier: string) => { email: string; name: string; username?: string; avatar?: string } | null;
+  findAccountByIdentifier: (identifier: string) => {
+    email: string;
+    name: string;
+    username?: string;
+    avatar?: string;
+    phone?: string;
+    membershipNumber?: string;
+  } | null;
   resetPasswordWithRecovery: (emailOrUsername: string, newPassword: string) => boolean;
 }
 
@@ -436,44 +443,78 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     saveToStorage('members', updatedList);
   };
 
-  const findAccountByIdentifier = (identifier: string): { email: string; name: string; username?: string; avatar?: string } | null => {
+  const findAccountByIdentifier = (
+    identifier: string
+  ): {
+    email: string;
+    name: string;
+    username?: string;
+    avatar?: string;
+    phone?: string;
+    membershipNumber?: string;
+  } | null => {
     const clean = identifier.toLowerCase().trim();
     if (!clean) return null;
+    const digitsOnly = clean.replace(/[^0-9]/g, '');
 
-    // Check users
-    const matchedUser = users.find(
-      (u) =>
-        u.email.toLowerCase().trim() === clean ||
-        (u.username && u.username.toLowerCase().trim() === clean) ||
+    // 1. Check in users table
+    const matchedUser = users.find((u) => {
+      const uEmail = u.email.toLowerCase().trim();
+      const uUsername = (u.username || '').toLowerCase().trim();
+      const uPhoneDigits = (u.phone || '').replace(/[^0-9]/g, '');
+
+      return (
+        uEmail === clean ||
+        uUsername === clean ||
         (clean === 'superadmin' && u.role === 'SUPER_ADMIN') ||
-        (clean === 'admin' && u.role === 'ADMIN')
-    );
+        (clean === 'admin' && u.role === 'ADMIN') ||
+        (digitsOnly.length >= 6 && uPhoneDigits.endsWith(digitsOnly.slice(-8)))
+      );
+    });
+
     if (matchedUser) {
       return {
         email: matchedUser.email,
         name: matchedUser.name,
         username: matchedUser.username,
         avatar: matchedUser.avatar,
+        phone: matchedUser.phone,
       };
     }
 
-    // Check members
-    const matchedMember = members.find(
-      (m) =>
-        m.email.toLowerCase().trim() === clean ||
-        (m.username && m.username.toLowerCase().trim() === clean) ||
-        m.nickname.toLowerCase().trim() === clean
-    );
+    // 2. Check in members table
+    const matchedMember = members.find((m) => {
+      const mEmail = m.email.toLowerCase().trim();
+      const mUsername = (m.username || '').toLowerCase().trim();
+      const mNickname = (m.nickname || '').toLowerCase().trim();
+      const mFullName = m.fullName.toLowerCase().trim();
+      const mNumber = m.membershipNumber.toLowerCase().trim();
+      const mNumberClean = mNumber.replace(/[^a-z0-9]/gi, '');
+      const mPhoneDigits = m.phone.replace(/[^0-9]/g, '');
+
+      return (
+        mEmail === clean ||
+        mUsername === clean ||
+        mNickname === clean ||
+        mFullName === clean ||
+        mNumber === clean ||
+        mNumberClean === clean.replace(/[^a-z0-9]/gi, '') ||
+        (digitsOnly.length >= 6 && mPhoneDigits.endsWith(digitsOnly.slice(-8)))
+      );
+    });
+
     if (matchedMember) {
       return {
         email: matchedMember.email,
         name: matchedMember.fullName,
         username: matchedMember.username || matchedMember.nickname,
         avatar: matchedMember.avatar,
+        phone: matchedMember.phone,
+        membershipNumber: matchedMember.membershipNumber,
       };
     }
 
-    // If identifier is a valid email format, return as plausible email
+    // If identifier looks like an email format, return structured fallback
     if (clean.includes('@') && clean.includes('.')) {
       return {
         email: clean,

@@ -74,9 +74,13 @@ export const AuthModal: React.FC<AuthModalProps> = ({
     try {
       const found = findAccountByIdentifier(clean);
       const targetEmail = found?.email || clean;
-      await sendFirebasePasswordResetEmail(targetEmail);
+      await sendFirebasePasswordResetEmail(targetEmail, {
+        name: found?.name,
+        phone: found?.phone,
+        membershipNumber: found?.membershipNumber,
+      });
       setForgotSent(true);
-      showToast(`Tautan reset kata sandi telah dikirim ke ${targetEmail}`, 'success');
+      showToast(`Tautan dan instruksi reset kata sandi telah dikirim ke ${targetEmail}`, 'success');
     } catch (err: unknown) {
       const msg = err instanceof Error ? err.message : String(err);
       setErrorMessage(`Gagal mengirim tautan reset: ${msg}`);

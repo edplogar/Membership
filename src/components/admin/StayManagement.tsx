@@ -3,6 +3,7 @@ import { useApp } from '../../context/AppContext';
 import { Stay, Member } from '../../types';
 import { formatIDR, formatDateIndo } from '../../services/membershipEngine';
 import { Modal } from '../common/Modal';
+import { MemberSearchSelect } from '../common/MemberSearchSelect';
 import { BedDouble, Plus, Calendar, Check, Search, Download } from 'lucide-react';
 import { exportToCSV } from '../../services/exportService';
 
@@ -259,22 +260,17 @@ export const StayManagement: React.FC<StayManagementProps> = ({
         <form onSubmit={handleSubmit} className="space-y-4">
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
             <div className="sm:col-span-2">
-              <label className="block text-xs font-semibold text-stone-700 mb-1">
-                Pilih Member Tamu *
-              </label>
-              <select
-                value={formData.memberId}
-                onChange={(e) => setFormData({ ...formData, memberId: e.target.value })}
-                className="w-full px-3 py-2 bg-stone-50 border border-stone-200 rounded-xl text-xs focus:ring-2 focus:ring-emerald-700/20"
+              <MemberSearchSelect
+                members={members}
+                tiers={[]}
+                selectedMemberId={formData.memberId}
+                onSelectMember={(selected) =>
+                  setFormData({ ...formData, memberId: selected.id })
+                }
+                label="Pilih & Cari Member Tamu"
+                placeholder="Cari nama member, no. kartu, atau no. HP/WA..."
                 required
-              >
-                {members.map((m) => (
-                  <option key={m.id} value={m.id}>
-                    {m.fullName} ({m.membershipNumber}) - Tier:{' '}
-                    {m.tierId.replace('tier_', '').toUpperCase()}
-                  </option>
-                ))}
-              </select>
+              />
             </div>
 
             <div>
