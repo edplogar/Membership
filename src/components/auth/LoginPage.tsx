@@ -380,19 +380,8 @@ export const LoginPage: React.FC<LoginPageProps> = ({ onSuccess, onExplorePublic
               </div>
             </div>
 
-            {/* Bottom Highlights & Security Badges */}
-            <div className="relative z-10 pt-8 border-t border-white/10 space-y-4">
-              <div className="grid grid-cols-2 gap-3 text-xs">
-                <div className="p-3 rounded-xl bg-white/5 border border-white/10 space-y-1">
-                  <div className="text-[10px] text-stone-400 font-bold uppercase tracking-wider">Multi-User</div>
-                  <div className="font-bold text-emerald-400">Tamu & Manajemen</div>
-                </div>
-                <div className="p-3 rounded-xl bg-white/5 border border-white/10 space-y-1">
-                  <div className="text-[10px] text-stone-400 font-bold uppercase tracking-wider">Keamanan</div>
-                  <div className="font-bold text-emerald-400">Verifikasi Google</div>
-                </div>
-              </div>
-
+            {/* Bottom Contact Info */}
+            <div className="relative z-10 pt-8 border-t border-white/10">
               <div className="text-[11px] text-stone-400 flex items-center justify-between">
                 <span>Jl. Bung Karno No. 7, Mataram</span>
                 <span>(0370) 636015</span>
