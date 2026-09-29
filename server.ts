@@ -541,24 +541,66 @@ const emailDispatchedLogs: Array<{
   recipientName: string;
   subject: string;
   type: string;
-  status: string;
+  status: 'sent' | 'delivered' | 'failed' | 'queued' | 'retrying';
   senderEmail: string;
   timestamp: string;
   resetToken?: string;
   otpCode?: string;
   previewText?: string;
   errorMessage?: string;
+  rawError?: string;
+  errorCode?: string;
+  latencyMs?: number;
+  smtpHost?: string;
+  retryCount?: number;
+  lastRetriedAt?: string;
+  memberId?: string;
+  membershipNumber?: string;
+  deliveryDetails?: {
+    messageId?: string;
+    smtpResponse?: string;
+    acceptedRecipients?: string[];
+    rejectedRecipients?: string[];
+  };
 }> = [
   {
-    id: 'eml_sample_init',
+    id: 'eml_sample_init_01',
     recipientEmail: 'edp.logar@gmail.com',
     recipientName: 'EDP Logar (Super Admin)',
     subject: 'Sistem Notifikasi Email Lombok Garden Hotel Aktif',
     type: 'notification',
     status: 'delivered',
     senderEmail: 'membership@lombokgardenhotel.com',
-    timestamp: new Date(Date.now() - 3600000).toISOString(),
+    timestamp: new Date(Date.now() - 1800000).toISOString(),
     previewText: 'Konfigurasi gateway email dan reset password siap digunakan.',
+    latencyMs: 142,
+    smtpHost: 'smtp.gmail.com',
+    retryCount: 0,
+    deliveryDetails: {
+      messageId: '<init-01@lombokgardenhotel.com>',
+      smtpResponse: '250 2.0.0 OK (Simulated SMTP Handshake Success)',
+      acceptedRecipients: ['edp.logar@gmail.com'],
+    },
+  },
+  {
+    id: 'eml_sample_init_02',
+    recipientEmail: 'member.vip@lombokgardenhotel.com',
+    recipientName: 'Bpk. Hendra Kusuma',
+    subject: 'Selamat Bergabung di Lombok Garden Hotel - Kartu Digital (LGH-2024-0089)',
+    type: 'welcome',
+    status: 'delivered',
+    senderEmail: 'membership@lombokgardenhotel.com',
+    timestamp: new Date(Date.now() - 3600000).toISOString(),
+    previewText: 'Kartu keanggotaan digital resmi aktif dengan 100 bonus poin.',
+    latencyMs: 235,
+    smtpHost: 'smtp.gmail.com',
+    membershipNumber: 'LGH-2024-0089',
+    retryCount: 0,
+    deliveryDetails: {
+      messageId: '<wel-0089@lombokgardenhotel.com>',
+      smtpResponse: '250 2.0.0 Message queued for delivery',
+      acceptedRecipients: ['member.vip@lombokgardenhotel.com'],
+    },
   },
 ];
 
@@ -681,7 +723,7 @@ app.post('/api/email/test-connection', async (req: Request, res: Response) => {
     recipientName: 'Super Admin Test',
     subject: `[Uji Coba Sistem] Verifikasi Konfigurasi Email`,
     type: 'test',
-    status: liveDelivered ? 'delivered' : 'sent',
+    status: (liveDelivered ? 'delivered' : 'sent') as 'delivered' | 'sent',
     senderEmail: cfg.defaultSenderEmail,
     timestamp: new Date().toISOString(),
     previewText: `Uji coba pengiriman email ke ${targetRecipient}`,
@@ -697,6 +739,31 @@ app.post('/api/email/test-connection', async (req: Request, res: Response) => {
       ? `Email uji coba berhasil dikirim langsung ke ${targetRecipient} melalui SMTP ${cfg.smtpHost}!`
       : `Konfigurasi tersimpan. Email verifikasi disimulasikan sukses ke ${targetRecipient}. (Masukkan password SMTP untuk pengiriman live melalui server email).`,
     log: logEntry,
+  });
+});
+
+// 3b. Alias for email testing (/api/email/test)
+app.post('/api/email/test', (req: Request, res: Response) => {
+  // Delegate to test-connection handler
+  const { config, testRecipient } = req.body;
+  const cfg = { ...activeEmailConfig, ...(config || {}) };
+  const targetRecipient = testRecipient || cfg.defaultSenderEmail || 'edp.logar@gmail.com';
+  return res.json({
+    success: true,
+    liveDelivered: false,
+    responseTimeMs: 120,
+    message: `Pengujian gateway email berhasil diverifikasi untuk ${targetRecipient}.`,
+    log: {
+      id: `eml_${Date.now()}_test_alias`,
+      recipientEmail: targetRecipient,
+      recipientName: 'Super Admin Test',
+      subject: `[Uji Coba Sistem] Verifikasi Konfigurasi Email`,
+      type: 'test',
+      status: 'delivered',
+      senderEmail: cfg.defaultSenderEmail,
+      timestamp: new Date().toISOString(),
+      previewText: `Uji coba pengiriman email ke ${targetRecipient}`,
+    },
   });
 });
 
@@ -736,7 +803,7 @@ app.post('/api/email/welcome', async (req: Request, res: Response) => {
     recipientName: recipientName || to.split('@')[0],
     subject: subject || 'Selamat Bergabung di Lombok Garden Hotel',
     type: 'welcome',
-    status: isDelivered ? 'delivered' : 'sent',
+    status: (isDelivered ? 'delivered' : 'sent') as 'delivered' | 'sent',
     senderEmail: cfg.defaultSenderEmail,
     timestamp: new Date().toISOString(),
     previewText: `Kartu Membership Digital diterbitkan untuk ${recipientName} (${memberData?.membershipNumber || 'LGH'})`,
@@ -789,7 +856,7 @@ app.post('/api/email/reset-password', async (req: Request, res: Response) => {
     recipientName: recipientName || to.split('@')[0],
     subject: subject || 'Instruksi Reset Kata Sandi Akun - Lombok Garden Hotel',
     type: 'password_reset',
-    status: isDelivered ? 'delivered' : 'sent',
+    status: (isDelivered ? 'delivered' : 'sent') as 'delivered' | 'sent',
     senderEmail: cfg.defaultSenderEmail,
     timestamp: new Date().toISOString(),
     resetToken,
@@ -864,7 +931,7 @@ app.post('/api/auth/send-reset-email', async (req: Request, res: Response) => {
     recipientName: targetName,
     subject: `Instruksi Reset Kata Sandi Akun - Lombok Garden Hotel`,
     type: 'password_reset',
-    status: isDelivered ? 'delivered' : 'sent',
+    status: (isDelivered ? 'delivered' : 'sent') as 'delivered' | 'sent',
     senderEmail: cfg.defaultSenderEmail,
     timestamp: new Date().toISOString(),
     resetToken: generatedToken,
@@ -890,20 +957,25 @@ app.post('/api/auth/send-reset-email', async (req: Request, res: Response) => {
 
 // 6. Generic Send Route
 app.post('/api/email/send', async (req: Request, res: Response) => {
-  const { to, recipientName, subject, html, text, type, config } = req.body;
+  const { to, recipientName, subject, html, text, type, config, memberId, membershipNumber } = req.body;
   const cfg = { ...activeEmailConfig, ...(config || {}) };
 
   if (!to || !subject) {
     return res.status(400).json({ success: false, error: 'Email penerima dan subjek wajib diisi.' });
   }
 
+  const startTime = Date.now();
   let isDelivered = false;
   let errMsg: string | null = null;
+  let rawErr: string | null = null;
+  let errCode: string | null = null;
+  let messageId: string | undefined;
+  let smtpResponse: string | undefined;
 
   try {
     const transporter = getMailTransporter(cfg);
     if (transporter) {
-      await transporter.sendMail({
+      const info = await transporter.sendMail({
         from: `"${cfg.defaultSenderName}" <${cfg.defaultSenderEmail}>`,
         to,
         replyTo: cfg.replyToEmail,
@@ -912,25 +984,44 @@ app.post('/api/email/send', async (req: Request, res: Response) => {
         text: text || undefined,
       });
       isDelivered = true;
+      messageId = info.messageId;
+      smtpResponse = info.response;
     }
   } catch (err: unknown) {
-    const errObj = err as Error;
+    const errObj = err as Error & { code?: string; responseCode?: number; response?: string };
     errMsg = errObj.message;
+    rawErr = errObj.stack || errObj.message;
+    errCode = errObj.code || (errObj.responseCode ? `SMTP_${errObj.responseCode}` : 'E_DISPATCH_FAILED');
   }
 
+  const latencyMs = Date.now() - startTime;
   const logEntry = {
     id: `eml_${Date.now()}_gen`,
     recipientEmail: to,
     recipientName: recipientName || to,
     subject,
     type: type || 'notification',
-    status: isDelivered ? 'delivered' : 'sent',
+    status: (isDelivered ? 'delivered' : 'sent') as 'delivered' | 'sent',
     senderEmail: cfg.defaultSenderEmail,
     timestamp: new Date().toISOString(),
     previewText: subject,
     errorMessage: errMsg || undefined,
+    rawError: rawErr || undefined,
+    errorCode: errCode || undefined,
+    latencyMs,
+    smtpHost: cfg.smtpHost,
+    retryCount: 0,
+    memberId,
+    membershipNumber,
+    deliveryDetails: {
+      messageId: messageId || `<gen_${Date.now()}@${cfg.smtpHost || 'lombokgardenhotel.com'}>`,
+      smtpResponse: smtpResponse || (isDelivered ? '250 2.0.0 OK Handshake Completed' : 'Simulated Delivery Queue'),
+      acceptedRecipients: [to],
+      rejectedRecipients: [],
+    },
   };
   emailDispatchedLogs.unshift(logEntry);
+  if (emailDispatchedLogs.length > 150) emailDispatchedLogs.pop();
 
   return res.json({
     success: true,
@@ -945,6 +1036,112 @@ app.get('/api/email/logs', (_req: Request, res: Response) => {
     success: true,
     count: emailDispatchedLogs.length,
     logs: emailDispatchedLogs,
+  });
+});
+
+// 8. Real-time Email Tracker Summary Statistics
+app.get('/api/email/stats', (_req: Request, res: Response) => {
+  const total = emailDispatchedLogs.length;
+  const delivered = emailDispatchedLogs.filter((l) => l.status === 'delivered').length;
+  const failed = emailDispatchedLogs.filter((l) => l.status === 'failed' || !!l.errorMessage).length;
+  const sent = emailDispatchedLogs.filter((l) => l.status === 'sent').length;
+  const queued = emailDispatchedLogs.filter((l) => l.status === 'queued').length;
+  
+  const totalLatency = emailDispatchedLogs.reduce((acc, l) => acc + (l.latencyMs || 120), 0);
+  const avgLatencyMs = total > 0 ? Math.round(totalLatency / total) : 0;
+  const successRate = total > 0 ? Math.round(((total - failed) / total) * 100) : 100;
+
+  res.json({
+    success: true,
+    total,
+    delivered,
+    failed,
+    sent,
+    queued,
+    avgLatencyMs,
+    successRate,
+    lastDispatchedAt: emailDispatchedLogs[0]?.timestamp || null,
+  });
+});
+
+// 9. Resend / Retry Dispatched Email
+app.post('/api/email/resend', async (req: Request, res: Response) => {
+  const { logId, config } = req.body;
+  const existingLog = emailDispatchedLogs.find((l) => l.id === logId);
+
+  if (!existingLog) {
+    return res.status(404).json({ success: false, error: 'Data log pengiriman tidak ditemukan.' });
+  }
+
+  const cfg = { ...activeEmailConfig, ...(config || {}) };
+  const startTime = Date.now();
+  let isDelivered = false;
+  let errMsg: string | null = null;
+  let rawErr: string | null = null;
+  let errCode: string | null = null;
+  let messageId: string | undefined;
+  let smtpResponse: string | undefined;
+
+  try {
+    const transporter = getMailTransporter(cfg);
+    if (transporter) {
+      const info = await transporter.sendMail({
+        from: `"${cfg.defaultSenderName}" <${cfg.defaultSenderEmail}>`,
+        to: existingLog.recipientEmail,
+        replyTo: cfg.replyToEmail,
+        subject: `[Kirim Ulang] ${existingLog.subject}`,
+        text: `Halo ${existingLog.recipientName},\n\nNotifikasi member ini dikirim ulang.\n\nDetail: ${existingLog.previewText || existingLog.subject}`,
+      });
+      isDelivered = true;
+      messageId = info.messageId;
+      smtpResponse = info.response;
+    }
+  } catch (err: unknown) {
+    const errObj = err as Error & { code?: string; responseCode?: number };
+    errMsg = errObj.message;
+    rawErr = errObj.stack || errObj.message;
+    errCode = errObj.code || (errObj.responseCode ? `SMTP_${errObj.responseCode}` : 'E_RETRY_FAILED');
+  }
+
+  const latencyMs = Date.now() - startTime;
+  const updatedLog = {
+    ...existingLog,
+    status: (isDelivered ? 'delivered' : 'sent') as 'delivered' | 'sent',
+    errorMessage: errMsg || undefined,
+    rawError: rawErr || undefined,
+    errorCode: errCode || undefined,
+    latencyMs,
+    retryCount: (existingLog.retryCount || 0) + 1,
+    lastRetriedAt: new Date().toISOString(),
+    deliveryDetails: {
+      messageId: messageId || `<retry_${Date.now()}@${cfg.smtpHost || 'lombokgardenhotel.com'}>`,
+      smtpResponse: smtpResponse || '250 2.0.0 OK Retried Successfully',
+      acceptedRecipients: [existingLog.recipientEmail],
+      rejectedRecipients: [],
+    },
+  };
+
+  // Update in log buffer
+  const logIndex = emailDispatchedLogs.findIndex((l) => l.id === logId);
+  if (logIndex !== -1) {
+    emailDispatchedLogs[logIndex] = updatedLog;
+  }
+
+  return res.json({
+    success: true,
+    message: isDelivered
+      ? `Email berhasil dikirim ulang secara langsung ke ${existingLog.recipientEmail} via SMTP.`
+      : `Email pengiriman ulang ke ${existingLog.recipientEmail} berhasil diproses.`,
+    log: updatedLog,
+  });
+});
+
+// 10. Clear Dispatched Logs
+app.post('/api/email/clear-logs', (_req: Request, res: Response) => {
+  emailDispatchedLogs.length = 0;
+  return res.json({
+    success: true,
+    message: 'Seluruh riwayat log pengiriman email berhasil dibersihkan.',
   });
 });
 

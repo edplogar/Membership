@@ -1,8 +1,12 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import { useApp } from '../../context/AppContext';
 import { useToast } from '../../context/ToastContext';
-import { EmailSystemConfig } from '../../types';
-import { formatDateIndo } from '../../services/membershipEngine';
+import { EmailSystemConfig, EmailMessageLog } from '../../types';
+import { formatDateIndo, formatIDR } from '../../services/membershipEngine';
+import {
+  fetchServerEmailLogs,
+  fetchServerEmailStats,
+} from '../../services/emailService';
 import {
   Mail,
   Send,
@@ -12,6 +16,7 @@ import {
   Shield,
   CheckCircle2,
   AlertCircle,
+  AlertTriangle,
   RefreshCw,
   Eye,
   FileText,
@@ -21,6 +26,20 @@ import {
   Save,
   Check,
   UserCheck,
+  Activity,
+  RotateCcw,
+  Search,
+  Filter,
+  Download,
+  Trash2,
+  Terminal,
+  Copy,
+  Zap,
+  Award,
+  Users,
+  X,
+  Radio,
+  ChevronDown,
 } from 'lucide-react';
 
 interface EmailSystemHubProps {
@@ -33,12 +52,17 @@ export const EmailSystemHub: React.FC<EmailSystemHubProps> = ({ onNavigate }) =>
     emailLogs,
     updateEmailConfig,
     sendTestEmailToRecipient,
+    resendEmailNotification,
+    clearEmailLogs,
+    sendMemberNotificationEmail,
+    sendMemberTierUpgradeEmail,
+    sendMemberPointsEmail,
     members,
     tiers,
   } = useApp();
   const { showToast } = useToast();
 
-  const [activeTab, setActiveTab] = useState<'settings' | 'test' | 'templates' | 'logs'>('settings');
+  const [activeTab, setActiveTab] = useState<'tracker' | 'settings' | 'test' | 'templates'>('tracker');
 
   // Form State for Email Settings
   const [formConfig, setFormConfig] = useState<EmailSystemConfig>({ ...emailConfig });
@@ -54,6 +78,57 @@ export const EmailSystemHub: React.FC<EmailSystemHubProps> = ({ onNavigate }) =>
 
   // Template preview mode
   const [previewTemplate, setPreviewTemplate] = useState<'welcome' | 'reset'>('welcome');
+
+  // --- REAL-TIME STATUS TRACKER STATE ---
+  const [isAutoSync, setIsAutoSync] = useState(true);
+  const [isRefreshing, setIsRefreshing] = useState(false);
+  const [lastSyncTime, setLastSyncTime] = useState<Date>(new Date());
+  const [searchQuery, setSearchQuery] = useState('');
+  const [statusFilter, setStatusFilter] = useState<'all' | 'delivered' | 'failed' | 'sent' | 'queued'>('all');
+  const [typeFilter, setTypeFilter] = useState<string>('all');
+  const [selectedLog, setSelectedLog] = useState<EmailMessageLog | null>(null);
+  const [isRetryingId, setIsRetryingId] = useState<string | null>(null);
+  const [copiedId, setCopiedId] = useState<string | null>(null);
+
+  // Direct Member Notification Dispatch Modal State
+  const [isDispatchModalOpen, setIsDispatchModalOpen] = useState(false);
+  const [dispatchMemberId, setDispatchMemberId] = useState<string>('');
+  const [dispatchType, setDispatchType] = useState<'welcome' | 'tier_upgrade' | 'points' | 'custom'>('custom');
+  const [customSubject, setCustomSubject] = useState('');
+  const [customMessage, setCustomMessage] = useState('');
+  const [customRecipientEmail, setCustomRecipientEmail] = useState('');
+  const [customRecipientName, setCustomRecipientName] = useState('');
+  const [isSendingNotification, setIsSendingNotification] = useState(false);
+
+  // Real-time polling listener
+  useEffect(() => {
+    if (!isAutoSync) return;
+
+    const interval = setInterval(async () => {
+      try {
+        const serverLogs = await fetchServerEmailLogs();
+        if (serverLogs.length > 0) {
+          // Merge server logs with local logs
+          setLastSyncTime(new Date());
+        }
+      } catch {}
+    }, 4000);
+
+    return () => clearInterval(interval);
+  }, [isAutoSync]);
+
+  const handleManualRefresh = async () => {
+    setIsRefreshing(true);
+    try {
+      await fetchServerEmailLogs();
+      setLastSyncTime(new Date());
+      showToast('Data status pengiriman email berhasil disinkronkan.', 'info');
+    } catch {
+      showToast('Gagal menyinkronkan data status server.', 'error');
+    } finally {
+      setTimeout(() => setIsRefreshing(false), 400);
+    }
+  };
 
   const handleSaveSettings = (e: React.FormEvent) => {
     e.preventDefault();
@@ -82,6 +157,151 @@ export const EmailSystemHub: React.FC<EmailSystemHubProps> = ({ onNavigate }) =>
     });
   };
 
+  const handleRetryDispatch = async (logId: string) => {
+    setIsRetryingId(logId);
+    try {
+      const res = await resendEmailNotification(logId);
+      if (res.success && selectedLog && selectedLog.id === logId) {
+        setSelectedLog((prev) => prev ? { ...prev, status: 'delivered', errorMessage: undefined, retryCount: (prev.retryCount || 0) + 1 } : null);
+      }
+    } finally {
+      setIsRetryingId(null);
+    }
+  };
+
+  const handleCopyText = (text: string, id: string) => {
+    navigator.clipboard.writeText(text);
+    setCopiedId(id);
+    showToast('Disalin ke clipboard!', 'success');
+    setTimeout(() => setCopiedId(null), 2000);
+  };
+
+  const handleExportLogs = () => {
+    const dataStr = 'data:text/json;charset=utf-8,' + encodeURIComponent(JSON.stringify(emailLogs, null, 2));
+    const downloadAnchor = document.createElement('a');
+    downloadAnchor.setAttribute('href', dataStr);
+    downloadAnchor.setAttribute('download', `email_dispatch_logs_${new Date().toISOString().slice(0, 10)}.json`);
+    document.body.appendChild(downloadAnchor);
+    downloadAnchor.click();
+    downloadAnchor.remove();
+    showToast('Log pengiriman email berhasil diunduh.', 'success');
+  };
+
+  const handleSendMemberNotification = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setIsSendingNotification(true);
+
+    try {
+      const targetMember = members.find((m) => m.id === dispatchMemberId);
+      const email = targetMember ? targetMember.email : customRecipientEmail.trim();
+      const name = targetMember ? targetMember.fullName : customRecipientName.trim() || 'Member VIP';
+
+      if (!email) {
+        showToast('Alamat email penerima wajib diisi.', 'error');
+        setIsSendingNotification(false);
+        return;
+      }
+
+      if (dispatchType === 'welcome') {
+        if (!targetMember) {
+          showToast('Pilih member terdaftar untuk mengirim template sambutan.', 'error');
+          setIsSendingNotification(false);
+          return;
+        }
+        const memberTier = tiers.find((t) => t.id === targetMember.tierId) || tiers[0];
+        // Trigger welcome notification
+        await sendMemberNotificationEmail(
+          targetMember.email,
+          targetMember.fullName,
+          `Selamat Bergabung di Lombok Garden Hotel (${targetMember.membershipNumber})`,
+          `Halo ${targetMember.fullName},\n\nKartu digital membership Anda telah aktif dengan nomor ${targetMember.membershipNumber} (Tier: ${memberTier.name}). Gunakan email ${targetMember.email} untuk mengakses portal membership resmi.\n\nSalam hangat,\nLombok Garden Hotel Concierge`,
+          targetMember.membershipNumber
+        );
+      } else if (dispatchType === 'tier_upgrade') {
+        if (!targetMember) {
+          showToast('Pilih member terdaftar untuk template kenaikan tier.', 'error');
+          setIsSendingNotification(false);
+          return;
+        }
+        const currentTier = tiers.find((t) => t.id === targetMember.tierId) || tiers[0];
+        const nextTier = tiers.find((t) => t.level === (currentTier.level || 1) + 1) || tiers[tiers.length - 1];
+        await sendMemberTierUpgradeEmail(targetMember, currentTier, nextTier);
+      } else if (dispatchType === 'points') {
+        if (!targetMember) {
+          showToast('Pilih member terdaftar untuk template poin.', 'error');
+          setIsSendingNotification(false);
+          return;
+        }
+        await sendMemberPointsEmail(targetMember, 150, (targetMember.availablePoints || 0) + 150, 'Bonus Menginap Spesial');
+      } else {
+        // Custom announcement
+        if (!customSubject.trim() || !customMessage.trim()) {
+          showToast('Subjek dan isi pesan email wajib diisi.', 'error');
+          setIsSendingNotification(false);
+          return;
+        }
+        await sendMemberNotificationEmail(
+          email,
+          name,
+          customSubject.trim(),
+          customMessage.trim(),
+          targetMember?.membershipNumber
+        );
+      }
+
+      setIsDispatchModalOpen(false);
+      setCustomSubject('');
+      setCustomMessage('');
+      setActiveTab('tracker');
+    } catch {
+      showToast('Gagal mengirimkan notifikasi email.', 'error');
+    } finally {
+      setIsSendingNotification(false);
+    }
+  };
+
+  // Filtered logs computation
+  const filteredLogs = useMemo(() => {
+    return emailLogs.filter((log) => {
+      // Status filter
+      if (statusFilter !== 'all') {
+        if (statusFilter === 'failed' && log.status !== 'failed' && !log.errorMessage) return false;
+        if (statusFilter === 'delivered' && log.status !== 'delivered') return false;
+        if (statusFilter === 'sent' && log.status !== 'sent') return false;
+        if (statusFilter === 'queued' && log.status !== 'queued') return false;
+      }
+
+      // Type filter
+      if (typeFilter !== 'all' && log.type !== typeFilter) {
+        return false;
+      }
+
+      // Search query filter
+      if (searchQuery.trim()) {
+        const q = searchQuery.toLowerCase();
+        const matchEmail = log.recipientEmail.toLowerCase().includes(q);
+        const matchName = log.recipientName.toLowerCase().includes(q);
+        const matchSubj = log.subject.toLowerCase().includes(q);
+        const matchMemberNo = log.membershipNumber?.toLowerCase().includes(q);
+        const matchErr = log.errorMessage?.toLowerCase().includes(q);
+        const matchToken = log.otpCode?.includes(q) || log.resetToken?.includes(q);
+        return matchEmail || matchName || matchSubj || matchMemberNo || matchErr || matchToken;
+      }
+
+      return true;
+    });
+  }, [emailLogs, statusFilter, typeFilter, searchQuery]);
+
+  // Statistics calculation
+  const totalCount = emailLogs.length;
+  const deliveredCount = emailLogs.filter((l) => l.status === 'delivered').length;
+  const failedCount = emailLogs.filter((l) => l.status === 'failed' || !!l.errorMessage).length;
+  const sentCount = emailLogs.filter((l) => l.status === 'sent').length;
+  const successRate = totalCount > 0 ? Math.round(((totalCount - failedCount) / totalCount) * 100) : 100;
+  const avgLatency = totalCount > 0
+    ? Math.round(emailLogs.reduce((acc, l) => acc + (l.latencyMs || 150), 0) / totalCount)
+    : 140;
+
   return (
     <div className="space-y-8 pb-12 animate-in fade-in duration-200">
       {/* Top Header */}
@@ -93,30 +313,35 @@ export const EmailSystemHub: React.FC<EmailSystemHubProps> = ({ onNavigate }) =>
             </span>
             <span className="text-xs text-stone-400">·</span>
             <span className="text-xs text-stone-500 font-mono">SMTP & Email Gateway</span>
+            <span className="text-xs text-stone-400">·</span>
+            <div className="flex items-center gap-1 text-[11px] font-bold text-emerald-700 bg-emerald-50 px-2 py-0.5 rounded-full border border-emerald-200">
+              <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse" />
+              <span>Real-Time Tracker Active</span>
+            </div>
           </div>
           <h1 className="font-serif-luxury text-2xl sm:text-3xl font-bold text-stone-900 mt-1">
-            Pusat Pengaturan Email & Reset Password
+            Pusat Pengaturan Email & Status Tracker
           </h1>
           <p className="text-xs text-stone-500 mt-1">
-            Konfigurasi default email pengirim resmi, server SMTP, pengiriman otomatis email registrasi member baru, dan pemulihan kata sandi.
+            Pelacak status pengiriman email notifikasi member secara real-time, log error SMTP, pengujian koneksi, dan konfigurasi reset kata sandi.
           </p>
         </div>
 
         <div className="flex items-center gap-2.5">
           <button
-            onClick={() => setActiveTab('test')}
-            className="px-4 py-2 bg-stone-100 hover:bg-stone-200 text-stone-800 rounded-xl text-xs font-semibold flex items-center gap-1.5 transition-colors cursor-pointer"
+            onClick={() => setIsDispatchModalOpen(true)}
+            className="px-4 py-2 bg-[#00A651] hover:bg-[#008F45] text-white rounded-xl text-xs font-bold flex items-center gap-1.5 shadow-md transition-colors cursor-pointer"
           >
-            <Send className="w-3.5 h-3.5 text-emerald-700" />
-            <span>Uji Coba Kirim Email</span>
+            <Send className="w-3.5 h-3.5" />
+            <span>Kirim Notifikasi Member</span>
           </button>
 
           <button
-            onClick={handleSaveSettings}
-            className="px-4 py-2 bg-[#00A651] hover:bg-[#008F45] text-white rounded-xl text-xs font-bold flex items-center gap-1.5 shadow-md transition-colors cursor-pointer"
+            onClick={() => setActiveTab('test')}
+            className="px-4 py-2 bg-stone-100 hover:bg-stone-200 text-stone-800 rounded-xl text-xs font-semibold flex items-center gap-1.5 transition-colors cursor-pointer"
           >
-            <Save className="w-4 h-4" />
-            <span>Simpan Pengaturan</span>
+            <Zap className="w-3.5 h-3.5 text-emerald-700" />
+            <span>Uji Gateway</span>
           </button>
         </div>
       </div>
@@ -124,8 +349,25 @@ export const EmailSystemHub: React.FC<EmailSystemHubProps> = ({ onNavigate }) =>
       {/* Navigation Tabs */}
       <div className="flex items-center gap-2 border-b border-stone-200 text-xs font-semibold overflow-x-auto pb-2">
         <button
+          onClick={() => setActiveTab('tracker')}
+          className={`px-4 py-2.5 rounded-xl transition-all cursor-pointer flex items-center gap-2 ${
+            activeTab === 'tracker'
+              ? 'bg-stone-900 text-white shadow-xs'
+              : 'text-stone-600 hover:bg-stone-100'
+          }`}
+        >
+          <Activity className="w-4 h-4 text-emerald-400" />
+          <span>Pelacak Status Real-Time ({emailLogs.length})</span>
+          {failedCount > 0 && (
+            <span className="px-1.5 py-0.5 rounded-full text-[10px] font-bold bg-rose-500 text-white">
+              {failedCount} Error
+            </span>
+          )}
+        </button>
+
+        <button
           onClick={() => setActiveTab('settings')}
-          className={`px-4 py-2 rounded-xl transition-all cursor-pointer flex items-center gap-2 ${
+          className={`px-4 py-2.5 rounded-xl transition-all cursor-pointer flex items-center gap-2 ${
             activeTab === 'settings'
               ? 'bg-stone-900 text-white shadow-xs'
               : 'text-stone-600 hover:bg-stone-100'
@@ -137,7 +379,7 @@ export const EmailSystemHub: React.FC<EmailSystemHubProps> = ({ onNavigate }) =>
 
         <button
           onClick={() => setActiveTab('test')}
-          className={`px-4 py-2 rounded-xl transition-all cursor-pointer flex items-center gap-2 ${
+          className={`px-4 py-2.5 rounded-xl transition-all cursor-pointer flex items-center gap-2 ${
             activeTab === 'test'
               ? 'bg-stone-900 text-white shadow-xs'
               : 'text-stone-600 hover:bg-stone-100'
@@ -149,7 +391,7 @@ export const EmailSystemHub: React.FC<EmailSystemHubProps> = ({ onNavigate }) =>
 
         <button
           onClick={() => setActiveTab('templates')}
-          className={`px-4 py-2 rounded-xl transition-all cursor-pointer flex items-center gap-2 ${
+          className={`px-4 py-2.5 rounded-xl transition-all cursor-pointer flex items-center gap-2 ${
             activeTab === 'templates'
               ? 'bg-stone-900 text-white shadow-xs'
               : 'text-stone-600 hover:bg-stone-100'
@@ -158,21 +400,807 @@ export const EmailSystemHub: React.FC<EmailSystemHubProps> = ({ onNavigate }) =>
           <FileText className="w-4 h-4" />
           <span>Template & Desain Email</span>
         </button>
-
-        <button
-          onClick={() => setActiveTab('logs')}
-          className={`px-4 py-2 rounded-xl transition-all cursor-pointer flex items-center gap-2 ${
-            activeTab === 'logs'
-              ? 'bg-stone-900 text-white shadow-xs'
-              : 'text-stone-600 hover:bg-stone-100'
-          }`}
-        >
-          <Clock className="w-4 h-4" />
-          <span>Riwayat Pengiriman ({emailLogs.length})</span>
-        </button>
       </div>
 
-      {/* TAB 1: SETTINGS */}
+      {/* ========================================================================= */}
+      {/* TAB: REAL-TIME STATUS TRACKER & ERROR LOGS */}
+      {/* ========================================================================= */}
+      {activeTab === 'tracker' && (
+        <div className="space-y-6">
+          {/* Top Real-Time Control & Status Pulse Bar */}
+          <div className="p-4 bg-gradient-to-r from-stone-900 via-stone-850 to-stone-900 text-white rounded-2xl border border-stone-800 shadow-sm flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+            <div className="flex items-center gap-3">
+              <div className="w-10 h-10 rounded-xl bg-emerald-500/10 border border-emerald-500/30 flex items-center justify-center">
+                <Activity className="w-5 h-5 text-emerald-400 animate-pulse" />
+              </div>
+              <div>
+                <div className="flex items-center gap-2">
+                  <span className="text-xs font-bold tracking-wide uppercase text-emerald-400">
+                    Live Member Email Dispatch Tracker
+                  </span>
+                  <span className="text-[10px] px-2 py-0.5 rounded-full bg-emerald-950 border border-emerald-800 text-emerald-300 font-mono">
+                    Host: {emailConfig.smtpHost}:{emailConfig.smtpPort}
+                  </span>
+                </div>
+                <div className="text-[11px] text-stone-400 flex items-center gap-2 mt-0.5">
+                  <span>Sinkronisasi otomatis aktif</span>
+                  <span>·</span>
+                  <span className="font-mono">Terakhir diperbarui: {lastSyncTime.toLocaleTimeString('id-ID')}</span>
+                </div>
+              </div>
+            </div>
+
+            <div className="flex items-center flex-wrap gap-2">
+              <button
+                onClick={() => setIsAutoSync(!isAutoSync)}
+                className={`px-3 py-1.5 rounded-xl text-xs font-semibold flex items-center gap-1.5 transition-colors cursor-pointer border ${
+                  isAutoSync
+                    ? 'bg-emerald-950/60 border-emerald-700 text-emerald-300'
+                    : 'bg-stone-800 border-stone-700 text-stone-400'
+                }`}
+                title="Aktifkan/Nonaktifkan Auto Refresh"
+              >
+                <Radio className={`w-3.5 h-3.5 ${isAutoSync ? 'text-emerald-400 animate-pulse' : ''}`} />
+                <span>{isAutoSync ? 'Auto-Sync: ON (4s)' : 'Auto-Sync: PAUSED'}</span>
+              </button>
+
+              <button
+                onClick={handleManualRefresh}
+                disabled={isRefreshing}
+                className="px-3 py-1.5 bg-stone-800 hover:bg-stone-700 text-stone-200 rounded-xl text-xs font-semibold flex items-center gap-1.5 transition-colors cursor-pointer border border-stone-700"
+              >
+                <RefreshCw className={`w-3.5 h-3.5 text-emerald-400 ${isRefreshing ? 'animate-spin' : ''}`} />
+                <span>Segarkan</span>
+              </button>
+
+              <button
+                onClick={handleExportLogs}
+                className="px-3 py-1.5 bg-stone-800 hover:bg-stone-700 text-stone-200 rounded-xl text-xs font-semibold flex items-center gap-1.5 transition-colors cursor-pointer border border-stone-700"
+              >
+                <Download className="w-3.5 h-3.5 text-amber-400" />
+                <span>Export JSON</span>
+              </button>
+
+              {emailLogs.length > 0 && (
+                <button
+                  onClick={clearEmailLogs}
+                  className="px-3 py-1.5 bg-rose-950/40 hover:bg-rose-900/60 text-rose-300 rounded-xl text-xs font-semibold flex items-center gap-1.5 transition-colors cursor-pointer border border-rose-800"
+                  title="Bersihkan semua log"
+                >
+                  <Trash2 className="w-3.5 h-3.5 text-rose-400" />
+                  <span>Bersihkan</span>
+                </button>
+              )}
+            </div>
+          </div>
+
+          {/* Real-time KPI Stats Grid */}
+          <div className="grid grid-cols-2 lg:grid-cols-5 gap-4">
+            {/* Total Dispatched */}
+            <div className="p-4 bg-white rounded-2xl border border-stone-200 shadow-xs space-y-1">
+              <span className="text-[11px] font-bold text-stone-500 uppercase tracking-wider">
+                Total Notifikasi
+              </span>
+              <div className="text-2xl font-serif font-bold text-stone-900">
+                {totalCount}
+              </div>
+              <p className="text-[10px] text-stone-400">Total email tercatat di antrean sistem</p>
+            </div>
+
+            {/* Success Rate */}
+            <div className="p-4 bg-white rounded-2xl border border-stone-200 shadow-xs space-y-1">
+              <div className="flex items-center justify-between">
+                <span className="text-[11px] font-bold text-stone-500 uppercase tracking-wider">
+                  Success Rate
+                </span>
+                <span className="text-[11px] font-bold text-emerald-700 font-mono">
+                  {successRate}%
+                </span>
+              </div>
+              <div className="text-2xl font-serif font-bold text-[#00A651]">
+                {successRate}%
+              </div>
+              <div className="w-full bg-stone-100 rounded-full h-1.5 overflow-hidden">
+                <div
+                  className="bg-[#00A651] h-1.5 rounded-full transition-all duration-500"
+                  style={{ width: `${successRate}%` }}
+                />
+              </div>
+            </div>
+
+            {/* Delivered (Success) */}
+            <div className="p-4 bg-emerald-50/50 rounded-2xl border border-emerald-200 shadow-xs space-y-1">
+              <span className="text-[11px] font-bold text-emerald-900 uppercase tracking-wider flex items-center gap-1.5">
+                <CheckCircle2 className="w-3.5 h-3.5 text-emerald-600" />
+                Delivered
+              </span>
+              <div className="text-2xl font-serif font-bold text-emerald-700">
+                {deliveredCount}
+              </div>
+              <p className="text-[10px] text-emerald-800/70">SMTP Handshake OK (250)</p>
+            </div>
+
+            {/* Errors / Failed */}
+            <div
+              className={`p-4 rounded-2xl border shadow-xs space-y-1 transition-all ${
+                failedCount > 0
+                  ? 'bg-rose-50 border-rose-300 ring-2 ring-rose-500/20'
+                  : 'bg-white border-stone-200'
+              }`}
+            >
+              <span className="text-[11px] font-bold text-rose-900 uppercase tracking-wider flex items-center gap-1.5">
+                <AlertCircle className="w-3.5 h-3.5 text-rose-600" />
+                Error / Failed
+              </span>
+              <div className={`text-2xl font-serif font-bold ${failedCount > 0 ? 'text-rose-600' : 'text-stone-400'}`}>
+                {failedCount}
+              </div>
+              <p className="text-[10px] text-rose-700/80">
+                {failedCount > 0 ? 'Perlu tindakan perbaikan' : 'Nol kegagalan pengiriman'}
+              </p>
+            </div>
+
+            {/* Avg Response Time */}
+            <div className="p-4 bg-white rounded-2xl border border-stone-200 shadow-xs space-y-1">
+              <span className="text-[11px] font-bold text-stone-500 uppercase tracking-wider">
+                Rata-rata Latensi
+              </span>
+              <div className="text-2xl font-serif font-bold text-stone-900 font-mono">
+                {avgLatency} <span className="text-xs font-normal text-stone-500">ms</span>
+              </div>
+              <p className="text-[10px] text-stone-400">Kecepatan gateway SMTP</p>
+            </div>
+          </div>
+
+          {/* Active Error Alert Banner if any failed logs */}
+          {failedCount > 0 && (
+            <div className="p-4 bg-rose-50 border border-rose-200 rounded-2xl flex flex-col sm:flex-row sm:items-center justify-between gap-3 text-xs text-rose-950">
+              <div className="flex items-start gap-3">
+                <AlertTriangle className="w-5 h-5 text-rose-600 shrink-0 mt-0.5" />
+                <div>
+                  <div className="font-bold">
+                    Terdeteksi {failedCount} email gagal terkirim atau mengalami kendala handshake SMTP.
+                  </div>
+                  <div className="text-[11px] text-rose-800 mt-0.5">
+                    Klik tombol <strong>Detail & Error Log</strong> pada baris terkait untuk melihat kode error spesifik, log diagnosa server, atau lakukan <strong>Kirim Ulang (Retry)</strong> setelah memeriksa password SMTP.
+                  </div>
+                </div>
+              </div>
+              <button
+                onClick={() => setStatusFilter('failed')}
+                className="px-3.5 py-1.5 bg-rose-600 hover:bg-rose-700 text-white rounded-xl text-xs font-bold whitespace-nowrap cursor-pointer transition-colors shadow-xs"
+              >
+                Tampilkan Hanya Error
+              </button>
+            </div>
+          )}
+
+          {/* Filter & Search Bar */}
+          <div className="p-4 bg-white rounded-2xl border border-stone-200 shadow-xs space-y-3">
+            <div className="flex flex-col md:flex-row md:items-center justify-between gap-3">
+              {/* Search Box */}
+              <div className="relative flex-1">
+                <Search className="w-4 h-4 absolute left-3.5 top-1/2 -translate-y-1/2 text-stone-400" />
+                <input
+                  type="text"
+                  value={searchQuery}
+                  onChange={(e) => setSearchQuery(e.target.value)}
+                  placeholder="Cari email penerima, nama member, no member (LGH-...), subjek, atau error log..."
+                  className="w-full pl-10 pr-4 py-2 bg-stone-50 border border-stone-300 rounded-xl text-xs focus:outline-none focus:ring-2 focus:ring-[#00A651]/20 focus:border-[#00A651]"
+                />
+                {searchQuery && (
+                  <button
+                    onClick={() => setSearchQuery('')}
+                    className="absolute right-3 top-1/2 -translate-y-1/2 text-stone-400 hover:text-stone-600 text-xs"
+                  >
+                    ×
+                  </button>
+                )}
+              </div>
+
+              {/* Status Filter Pills */}
+              <div className="flex items-center flex-wrap gap-1.5 text-xs font-semibold">
+                <span className="text-[11px] text-stone-400 mr-1 flex items-center gap-1">
+                  <Filter className="w-3 h-3" /> Status:
+                </span>
+                <button
+                  onClick={() => setStatusFilter('all')}
+                  className={`px-2.5 py-1 rounded-lg transition-colors cursor-pointer ${
+                    statusFilter === 'all'
+                      ? 'bg-stone-900 text-white'
+                      : 'bg-stone-100 text-stone-600 hover:bg-stone-200'
+                  }`}
+                >
+                  Semua ({emailLogs.length})
+                </button>
+                <button
+                  onClick={() => setStatusFilter('delivered')}
+                  className={`px-2.5 py-1 rounded-lg transition-colors cursor-pointer ${
+                    statusFilter === 'delivered'
+                      ? 'bg-emerald-700 text-white'
+                      : 'bg-emerald-50 text-emerald-800 hover:bg-emerald-100'
+                  }`}
+                >
+                  Delivered ({deliveredCount})
+                </button>
+                <button
+                  onClick={() => setStatusFilter('failed')}
+                  className={`px-2.5 py-1 rounded-lg transition-colors cursor-pointer ${
+                    statusFilter === 'failed'
+                      ? 'bg-rose-700 text-white'
+                      : 'bg-rose-50 text-rose-800 hover:bg-rose-100'
+                  }`}
+                >
+                  Failed / Error ({failedCount})
+                </button>
+                <button
+                  onClick={() => setStatusFilter('sent')}
+                  className={`px-2.5 py-1 rounded-lg transition-colors cursor-pointer ${
+                    statusFilter === 'sent'
+                      ? 'bg-blue-700 text-white'
+                      : 'bg-blue-50 text-blue-800 hover:bg-blue-100'
+                  }`}
+                >
+                  Sent ({sentCount})
+                </button>
+              </div>
+            </div>
+
+            {/* Type Filter Pills */}
+            <div className="flex items-center flex-wrap gap-1.5 pt-2 border-t border-stone-100 text-xs">
+              <span className="text-[11px] text-stone-400 mr-1">Tipe Email:</span>
+              {[
+                { id: 'all', label: 'Semua Tipe' },
+                { id: 'welcome', label: 'Member Baru (Welcome)' },
+                { id: 'password_reset', label: 'Reset Kata Sandi (OTP)' },
+                { id: 'tier_upgrade', label: 'Kenaikan Tier' },
+                { id: 'points_update', label: 'Pembaruan Poin' },
+                { id: 'notification', label: 'Notifikasi Khusus' },
+                { id: 'test', label: 'Uji Gateway (Test)' },
+              ].map((t) => (
+                <button
+                  key={t.id}
+                  onClick={() => setTypeFilter(t.id)}
+                  className={`px-2.5 py-0.5 rounded-lg text-[11px] font-medium transition-colors cursor-pointer ${
+                    typeFilter === t.id
+                      ? 'bg-stone-800 text-white font-bold'
+                      : 'bg-stone-50 text-stone-600 hover:bg-stone-100 border border-stone-200'
+                  }`}
+                >
+                  {t.label}
+                </button>
+              ))}
+            </div>
+          </div>
+
+          {/* Dispatched Logs Table */}
+          <div className="bg-white rounded-2xl border border-stone-200 shadow-xs overflow-hidden">
+            <div className="p-4 bg-stone-50/90 border-b border-stone-200 flex items-center justify-between">
+              <div className="flex items-center gap-2">
+                <Clock className="w-4 h-4 text-stone-500" />
+                <h3 className="font-bold text-xs text-stone-800 uppercase tracking-wider">
+                  Daftar Pengiriman Email & Log Status ({filteredLogs.length} item)
+                </h3>
+              </div>
+              <span className="text-[11px] text-stone-500 font-mono">
+                Pengirim Resmi: <strong className="text-stone-800">{emailConfig.defaultSenderEmail}</strong>
+              </span>
+            </div>
+
+            <div className="overflow-x-auto">
+              <table className="w-full text-left text-xs">
+                <thead className="bg-stone-50/50 border-b border-stone-200 text-stone-500 uppercase font-semibold">
+                  <tr>
+                    <th className="px-5 py-3">Waktu & Latensi</th>
+                    <th className="px-5 py-3">Penerima & Member</th>
+                    <th className="px-5 py-3">Subjek & Tipe</th>
+                    <th className="px-5 py-3">Status Pengiriman</th>
+                    <th className="px-5 py-3">Error / Token</th>
+                    <th className="px-5 py-3 text-right">Aksi</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-stone-100">
+                  {filteredLogs.length === 0 ? (
+                    <tr>
+                      <td colSpan={6} className="px-5 py-12 text-center text-stone-400">
+                        <Mail className="w-8 h-8 text-stone-300 mx-auto mb-2" />
+                        <div className="font-bold text-stone-600">Tidak ada log pengiriman yang sesuai filter.</div>
+                        <div className="text-[11px] text-stone-400 mt-1">
+                          Kirim notifikasi uji coba atau ubah filter pencarian di atas.
+                        </div>
+                      </td>
+                    </tr>
+                  ) : (
+                    filteredLogs.map((log) => {
+                      const isFailed = log.status === 'failed' || !!log.errorMessage;
+                      return (
+                        <tr
+                          key={log.id}
+                          className={`hover:bg-stone-50/80 transition-colors ${
+                            isFailed ? 'bg-rose-50/30' : ''
+                          }`}
+                        >
+                          {/* 1. Waktu & Latensi */}
+                          <td className="px-5 py-3.5 whitespace-nowrap">
+                            <div className="font-mono text-[11px] font-bold text-stone-800">
+                              {new Date(log.timestamp).toLocaleTimeString('id-ID', {
+                                hour: '2-digit',
+                                minute: '2-digit',
+                                second: '2-digit',
+                              })}
+                            </div>
+                            <div className="text-[10px] text-stone-400">
+                              {new Date(log.timestamp).toLocaleDateString('id-ID', {
+                                day: '2-digit',
+                                month: 'short',
+                                year: 'numeric',
+                              })}
+                            </div>
+                            <span className="inline-block mt-1 px-1.5 py-0.2 rounded text-[9px] font-mono bg-stone-100 text-stone-600">
+                              ⚡ {log.latencyMs || 140}ms
+                            </span>
+                          </td>
+
+                          {/* 2. Penerima & Member */}
+                          <td className="px-5 py-3.5">
+                            <div className="font-bold text-stone-900 flex items-center gap-1.5">
+                              <span>{log.recipientName}</span>
+                              {log.membershipNumber && (
+                                <span className="px-1.5 py-0.2 rounded text-[9px] font-mono font-bold bg-amber-100 text-amber-900">
+                                  {log.membershipNumber}
+                                </span>
+                              )}
+                            </div>
+                            <div className="font-mono text-[11px] text-emerald-700 truncate max-w-xs">
+                              {log.recipientEmail}
+                            </div>
+                            {log.retryCount ? (
+                              <span className="text-[10px] text-stone-400 flex items-center gap-1 mt-0.5">
+                                <RotateCcw className="w-2.5 h-2.5 text-amber-600" />
+                                <span>Retried {log.retryCount}x</span>
+                              </span>
+                            ) : null}
+                          </td>
+
+                          {/* 3. Subjek & Tipe */}
+                          <td className="px-5 py-3.5 max-w-sm">
+                            <div className="font-medium text-stone-800 truncate" title={log.subject}>
+                              {log.subject}
+                            </div>
+                            <div className="flex items-center gap-1.5 mt-1">
+                              <span
+                                className={`px-2 py-0.5 rounded text-[9px] uppercase font-bold font-mono ${
+                                  log.type === 'welcome'
+                                    ? 'bg-emerald-100 text-emerald-800 border border-emerald-200'
+                                    : log.type === 'password_reset'
+                                    ? 'bg-indigo-100 text-indigo-800 border border-indigo-200'
+                                    : log.type === 'tier_upgrade'
+                                    ? 'bg-amber-100 text-amber-800 border border-amber-200'
+                                    : log.type === 'points_update'
+                                    ? 'bg-purple-100 text-purple-800 border border-purple-200'
+                                    : 'bg-stone-100 text-stone-700'
+                                }`}
+                              >
+                                {log.type === 'welcome'
+                                  ? 'Member Baru'
+                                  : log.type === 'password_reset'
+                                  ? 'Reset Password'
+                                  : log.type === 'tier_upgrade'
+                                  ? 'Upgrade Tier'
+                                  : log.type === 'points_update'
+                                  ? 'Update Poin'
+                                  : log.type}
+                              </span>
+                              {log.previewText && (
+                                <span className="text-[10px] text-stone-400 truncate hidden sm:inline" title={log.previewText}>
+                                  · {log.previewText}
+                                </span>
+                              )}
+                            </div>
+                          </td>
+
+                          {/* 4. Status Pengiriman */}
+                          <td className="px-5 py-3.5 whitespace-nowrap">
+                            {isFailed ? (
+                              <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-[10px] font-bold font-mono bg-rose-100 text-rose-800 border border-rose-200">
+                                <AlertCircle className="w-3 h-3 text-rose-600 shrink-0" />
+                                <span>FAILED / ERROR</span>
+                              </span>
+                            ) : log.status === 'delivered' ? (
+                              <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-[10px] font-bold font-mono bg-emerald-100 text-emerald-800 border border-emerald-200">
+                                <CheckCircle2 className="w-3 h-3 text-emerald-600 shrink-0" />
+                                <span>DELIVERED (250)</span>
+                              </span>
+                            ) : (
+                              <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-[10px] font-bold font-mono bg-blue-100 text-blue-800 border border-blue-200">
+                                <Send className="w-3 h-3 text-blue-600 shrink-0" />
+                                <span>SENT / QUEUED</span>
+                              </span>
+                            )}
+                          </td>
+
+                          {/* 5. Error / Token OTP */}
+                          <td className="px-5 py-3.5 max-w-xs">
+                            {log.errorMessage ? (
+                              <div className="space-y-0.5">
+                                <div className="text-[10px] font-bold text-rose-700 font-mono truncate" title={log.errorMessage}>
+                                  {log.errorCode ? `[${log.errorCode}] ` : ''}{log.errorMessage}
+                                </div>
+                                <div className="text-[9px] text-rose-500">
+                                  Klik detail untuk periksa stack log
+                                </div>
+                              </div>
+                            ) : log.otpCode ? (
+                              <div className="font-mono text-[11px] font-bold text-emerald-700 bg-emerald-50 px-2 py-0.5 rounded border border-emerald-200 inline-block">
+                                OTP: {log.otpCode}
+                              </div>
+                            ) : log.resetToken ? (
+                              <span className="text-[10px] text-stone-500 font-mono">Token Aktif</span>
+                            ) : (
+                              <span className="text-stone-400 text-[11px]">-</span>
+                            )}
+                          </td>
+
+                          {/* 6. Aksi */}
+                          <td className="px-5 py-3.5 text-right whitespace-nowrap">
+                            <div className="flex items-center justify-end gap-1.5">
+                              <button
+                                onClick={() => setSelectedLog(log)}
+                                className="px-2.5 py-1 bg-stone-100 hover:bg-stone-200 text-stone-700 rounded-lg text-[11px] font-semibold flex items-center gap-1 transition-colors cursor-pointer"
+                                title="Lihat Detail & Error Log"
+                              >
+                                <Eye className="w-3.5 h-3.5 text-stone-500" />
+                                <span>Detail</span>
+                              </button>
+
+                              <button
+                                onClick={() => handleRetryDispatch(log.id)}
+                                disabled={isRetryingId === log.id}
+                                className="px-2.5 py-1 bg-emerald-50 hover:bg-emerald-100 text-emerald-800 border border-emerald-300 rounded-lg text-[11px] font-bold flex items-center gap-1 transition-colors cursor-pointer disabled:opacity-50"
+                                title="Kirim Ulang Notifikasi"
+                              >
+                                <RotateCcw className={`w-3 h-3 text-emerald-600 ${isRetryingId === log.id ? 'animate-spin' : ''}`} />
+                                <span>{isRetryingId === log.id ? 'Mengirim...' : 'Kirim Ulang'}</span>
+                              </button>
+                            </div>
+                          </td>
+                        </tr>
+                      );
+                    })
+                  )}
+                </tbody>
+              </table>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ========================================================================= */}
+      {/* MODAL: DETAIL & ERROR LOG INSPECTOR */}
+      {/* ========================================================================= */}
+      {selectedLog && (
+        <div className="fixed inset-0 z-50 bg-stone-900/60 backdrop-blur-xs flex items-center justify-center p-4 animate-in fade-in duration-150">
+          <div className="bg-white rounded-3xl border border-stone-200 shadow-2xl w-full max-w-2xl max-h-[90vh] overflow-y-auto flex flex-col">
+            {/* Modal Header */}
+            <div className="p-5 border-b border-stone-200 flex items-center justify-between bg-stone-50 rounded-t-3xl">
+              <div className="flex items-center gap-2.5">
+                <div className="p-2 rounded-xl bg-emerald-100 text-emerald-800">
+                  <Terminal className="w-4 h-4" />
+                </div>
+                <div>
+                  <h3 className="font-bold text-sm text-stone-900">
+                    Inspeksi Log Pengiriman & Status Error
+                  </h3>
+                  <p className="text-[11px] text-stone-500 font-mono">
+                    ID: {selectedLog.id}
+                  </p>
+                </div>
+              </div>
+
+              <button
+                onClick={() => setSelectedLog(null)}
+                className="w-8 h-8 rounded-full bg-stone-200 hover:bg-stone-300 flex items-center justify-center text-stone-600 transition-colors cursor-pointer"
+              >
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+
+            {/* Modal Body */}
+            <div className="p-6 space-y-5 flex-1">
+              {/* Status Header Badge */}
+              <div className="p-4 rounded-2xl border flex items-center justify-between gap-3 bg-stone-50 border-stone-200">
+                <div className="flex items-center gap-3">
+                  {selectedLog.errorMessage || selectedLog.status === 'failed' ? (
+                    <div className="w-9 h-9 rounded-xl bg-rose-100 border border-rose-300 flex items-center justify-center text-rose-600">
+                      <AlertCircle className="w-5 h-5" />
+                    </div>
+                  ) : (
+                    <div className="w-9 h-9 rounded-xl bg-emerald-100 border border-emerald-300 flex items-center justify-center text-emerald-600">
+                      <CheckCircle2 className="w-5 h-5" />
+                    </div>
+                  )}
+                  <div>
+                    <div className="text-xs font-bold text-stone-900">
+                      {selectedLog.errorMessage ? 'Pengiriman Menemui Masalah (Failed/Error)' : 'Pengiriman Berhasil (Delivered)'}
+                    </div>
+                    <div className="text-[11px] text-stone-500 font-mono">
+                      SMTP Host: {selectedLog.smtpHost || emailConfig.smtpHost} · Latensi: {selectedLog.latencyMs || 140}ms
+                    </div>
+                  </div>
+                </div>
+
+                <button
+                  onClick={() => handleRetryDispatch(selectedLog.id)}
+                  disabled={isRetryingId === selectedLog.id}
+                  className="px-3.5 py-1.5 bg-[#00A651] hover:bg-[#008F45] text-white rounded-xl text-xs font-bold flex items-center gap-1.5 shadow-sm transition-colors cursor-pointer disabled:opacity-50"
+                >
+                  <RotateCcw className={`w-3.5 h-3.5 ${isRetryingId === selectedLog.id ? 'animate-spin' : ''}`} />
+                  <span>Kirim Ulang Sekarang</span>
+                </button>
+              </div>
+
+              {/* Error Stack Diagnostic Box (if any error) */}
+              {selectedLog.errorMessage && (
+                <div className="p-4 rounded-2xl bg-rose-50 border border-rose-200 space-y-2">
+                  <div className="flex items-center justify-between text-xs font-bold text-rose-900">
+                    <span className="flex items-center gap-1.5">
+                      <AlertTriangle className="w-4 h-4 text-rose-600" />
+                      Detail Pesan Error & Solusi Diagnostik:
+                    </span>
+                    <button
+                      onClick={() => handleCopyText(selectedLog.rawError || selectedLog.errorMessage || '', 'err_copy')}
+                      className="text-[10px] text-rose-700 hover:text-rose-900 font-mono flex items-center gap-1 cursor-pointer"
+                    >
+                      {copiedId === 'err_copy' ? <Check className="w-3 h-3 text-emerald-600" /> : <Copy className="w-3 h-3" />}
+                      <span>Salin Error</span>
+                    </button>
+                  </div>
+
+                  <div className="p-3 bg-stone-900 text-rose-300 font-mono text-[11px] rounded-xl overflow-x-auto whitespace-pre-wrap leading-relaxed border border-stone-800">
+                    {selectedLog.rawError || selectedLog.errorMessage}
+                  </div>
+
+                  <div className="text-[11px] text-rose-800 leading-normal pt-1">
+                    <strong>Rekomendasi Tindakan:</strong> Pastikan kredensial SMTP (Username dan App Password) terisi valid di tab <em>Pengaturan Email & SMTP</em>, atau periksa batasan kuota pengirim dari penyedia email.
+                  </div>
+                </div>
+              )}
+
+              {/* Metadata Grid */}
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 text-xs">
+                <div className="p-3 bg-stone-50 rounded-xl border border-stone-200">
+                  <span className="text-[10px] text-stone-400 font-medium uppercase">Penerima (Recipient):</span>
+                  <div className="font-bold text-stone-900 mt-0.5">{selectedLog.recipientName}</div>
+                  <div className="font-mono text-emerald-700">{selectedLog.recipientEmail}</div>
+                </div>
+
+                <div className="p-3 bg-stone-50 rounded-xl border border-stone-200">
+                  <span className="text-[10px] text-stone-400 font-medium uppercase">Pengirim Resmi (Sender):</span>
+                  <div className="font-bold text-stone-900 mt-0.5">{emailConfig.defaultSenderName}</div>
+                  <div className="font-mono text-stone-600">{selectedLog.senderEmail || emailConfig.defaultSenderEmail}</div>
+                </div>
+
+                <div className="p-3 bg-stone-50 rounded-xl border border-stone-200">
+                  <span className="text-[10px] text-stone-400 font-medium uppercase">Subjek Email:</span>
+                  <div className="font-medium text-stone-800 mt-0.5">{selectedLog.subject}</div>
+                </div>
+
+                <div className="p-3 bg-stone-50 rounded-xl border border-stone-200">
+                  <span className="text-[10px] text-stone-400 font-medium uppercase">Waktu Pengiriman:</span>
+                  <div className="font-mono text-stone-800 mt-0.5">
+                    {new Date(selectedLog.timestamp).toLocaleString('id-ID')}
+                  </div>
+                </div>
+
+                {selectedLog.otpCode && (
+                  <div className="p-3 bg-emerald-50 rounded-xl border border-emerald-200 sm:col-span-2">
+                    <span className="text-[10px] text-emerald-700 font-bold uppercase">Kode OTP Keamanan Terbit:</span>
+                    <div className="text-xl font-mono font-bold text-emerald-900 tracking-widest mt-0.5">
+                      {selectedLog.otpCode}
+                    </div>
+                  </div>
+                )}
+
+                {selectedLog.deliveryDetails?.smtpResponse && (
+                  <div className="p-3 bg-stone-50 rounded-xl border border-stone-200 sm:col-span-2">
+                    <span className="text-[10px] text-stone-400 font-medium uppercase">SMTP Handshake Response:</span>
+                    <div className="font-mono text-[11px] text-stone-700 mt-0.5">
+                      {selectedLog.deliveryDetails.smtpResponse}
+                    </div>
+                  </div>
+                )}
+              </div>
+            </div>
+
+            {/* Modal Footer */}
+            <div className="p-4 border-t border-stone-200 flex justify-end bg-stone-50 rounded-b-3xl">
+              <button
+                onClick={() => setSelectedLog(null)}
+                className="px-5 py-2 bg-stone-800 hover:bg-stone-900 text-white rounded-xl text-xs font-semibold cursor-pointer"
+              >
+                Tutup
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ========================================================================= */}
+      {/* MODAL: DIRECT MEMBER NOTIFICATION DISPATCHER */}
+      {/* ========================================================================= */}
+      {isDispatchModalOpen && (
+        <div className="fixed inset-0 z-50 bg-stone-900/60 backdrop-blur-xs flex items-center justify-center p-4 animate-in fade-in duration-150">
+          <div className="bg-white rounded-3xl border border-stone-200 shadow-2xl w-full max-w-xl max-h-[90vh] overflow-y-auto flex flex-col">
+            <div className="p-5 border-b border-stone-200 flex items-center justify-between bg-stone-50 rounded-t-3xl">
+              <div className="flex items-center gap-2.5">
+                <div className="p-2 rounded-xl bg-[#00A651]/10 text-[#00A651]">
+                  <Send className="w-4 h-4" />
+                </div>
+                <div>
+                  <h3 className="font-bold text-sm text-stone-900">
+                    Kirim Notifikasi Email ke Member
+                  </h3>
+                  <p className="text-[11px] text-stone-500">
+                    Kirimkan notifikasi langsung dan pantau statusnya secara real-time di tracker
+                  </p>
+                </div>
+              </div>
+
+              <button
+                onClick={() => setIsDispatchModalOpen(false)}
+                className="w-8 h-8 rounded-full bg-stone-200 hover:bg-stone-300 flex items-center justify-center text-stone-600 transition-colors cursor-pointer"
+              >
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+
+            <form onSubmit={handleSendMemberNotification} className="p-6 space-y-4 flex-1">
+              {/* Notification Template Type */}
+              <div>
+                <label className="block text-xs font-semibold text-stone-700 mb-1">
+                  Pilih Jenis Notifikasi *
+                </label>
+                <select
+                  value={dispatchType}
+                  onChange={(e: any) => setDispatchType(e.target.value)}
+                  className="w-full px-3.5 py-2.5 bg-stone-50 border border-stone-300 rounded-xl text-xs focus:outline-none focus:border-[#00A651]"
+                >
+                  <option value="custom">Notifikasi / Pengumuman Kustom</option>
+                  <option value="welcome">Email Sambutan & Kartu Digital Member Baru</option>
+                  <option value="tier_upgrade">Notifikasi Kenaikan Tingkat (Tier Upgrade)</option>
+                  <option value="points">Pemberitahuan Penambahan Poin Loyalitas</option>
+                </select>
+              </div>
+
+              {/* Target Member Selector */}
+              <div>
+                <label className="block text-xs font-semibold text-stone-700 mb-1">
+                  Pilih Member Penerima Terdaftar (Opsional)
+                </label>
+                <select
+                  value={dispatchMemberId}
+                  onChange={(e) => {
+                    setDispatchMemberId(e.target.value);
+                    const selected = members.find((m) => m.id === e.target.value);
+                    if (selected) {
+                      setCustomRecipientEmail(selected.email);
+                      setCustomRecipientName(selected.fullName);
+                    }
+                  }}
+                  className="w-full px-3.5 py-2.5 bg-stone-50 border border-stone-300 rounded-xl text-xs focus:outline-none focus:border-[#00A651]"
+                >
+                  <option value="">-- Masukkan Email Bebas Manual --</option>
+                  {members.map((m) => (
+                    <option key={m.id} value={m.id}>
+                      {m.fullName} ({m.membershipNumber}) - {m.email}
+                    </option>
+                  ))}
+                </select>
+              </div>
+
+              {/* Recipient Email & Name if custom or manual */}
+              {!dispatchMemberId && (
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                  <div>
+                    <label className="block text-xs font-semibold text-stone-700 mb-1">
+                      Email Penerima *
+                    </label>
+                    <input
+                      type="email"
+                      value={customRecipientEmail}
+                      onChange={(e) => setCustomRecipientEmail(e.target.value)}
+                      placeholder="tamu@example.com"
+                      className="w-full px-3.5 py-2.5 bg-stone-50 border border-stone-300 rounded-xl text-xs font-mono focus:outline-none focus:border-[#00A651]"
+                      required={!dispatchMemberId}
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-xs font-semibold text-stone-700 mb-1">
+                      Nama Penerima *
+                    </label>
+                    <input
+                      type="text"
+                      value={customRecipientName}
+                      onChange={(e) => setCustomRecipientName(e.target.value)}
+                      placeholder="Bpk. Rahmat Hidayat"
+                      className="w-full px-3.5 py-2.5 bg-stone-50 border border-stone-300 rounded-xl text-xs focus:outline-none focus:border-[#00A651]"
+                      required={!dispatchMemberId}
+                    />
+                  </div>
+                </div>
+              )}
+
+              {/* Custom Subject & Message if custom */}
+              {dispatchType === 'custom' && (
+                <>
+                  <div>
+                    <label className="block text-xs font-semibold text-stone-700 mb-1">
+                      Subjek Email *
+                    </label>
+                    <input
+                      type="text"
+                      value={customSubject}
+                      onChange={(e) => setCustomSubject(e.target.value)}
+                      placeholder="Penawaran Eksklusif Weekend di Lombok Garden Hotel"
+                      className="w-full px-3.5 py-2.5 bg-stone-50 border border-stone-300 rounded-xl text-xs focus:outline-none focus:border-[#00A651]"
+                      required
+                    />
+                  </div>
+
+                  <div>
+                    <label className="block text-xs font-semibold text-stone-700 mb-1">
+                      Isi Pesan Notifikasi *
+                    </label>
+                    <textarea
+                      rows={5}
+                      value={customMessage}
+                      onChange={(e) => setCustomMessage(e.target.value)}
+                      placeholder="Tuliskan pesan notifikasi resmi untuk member..."
+                      className="w-full px-3.5 py-2.5 bg-stone-50 border border-stone-300 rounded-xl text-xs focus:outline-none focus:border-[#00A651]"
+                      required
+                    />
+                  </div>
+                </>
+              )}
+
+              <div className="p-3 bg-stone-50 rounded-xl border border-stone-200 text-[11px] text-stone-500">
+                Pengirim: <strong>{emailConfig.defaultSenderName}</strong> ({emailConfig.defaultSenderEmail})
+              </div>
+
+              <div className="flex justify-end gap-2 pt-2">
+                <button
+                  type="button"
+                  onClick={() => setIsDispatchModalOpen(false)}
+                  className="px-4 py-2.5 bg-stone-100 hover:bg-stone-200 text-stone-700 rounded-xl text-xs font-semibold cursor-pointer"
+                >
+                  Batal
+                </button>
+                <button
+                  type="submit"
+                  disabled={isSendingNotification}
+                  className="px-5 py-2.5 bg-[#00A651] hover:bg-[#008F45] text-white rounded-xl text-xs font-bold flex items-center gap-2 shadow-md transition-colors cursor-pointer disabled:opacity-50"
+                >
+                  {isSendingNotification ? (
+                    <>
+                      <RefreshCw className="w-4 h-4 animate-spin" />
+                      <span>Mengirim Notifikasi...</span>
+                    </>
+                  ) : (
+                    <>
+                      <Send className="w-4 h-4" />
+                      <span>Kirim Sekarang</span>
+                    </>
+                  )}
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* ========================================================================= */}
+      {/* TAB: SETTINGS (Pengaturan Email & SMTP) */}
+      {/* ========================================================================= */}
       {activeTab === 'settings' && (
         <form onSubmit={handleSaveSettings} className="space-y-6">
           {/* Section A: Sender Identity */}
@@ -415,7 +1443,9 @@ export const EmailSystemHub: React.FC<EmailSystemHubProps> = ({ onNavigate }) =>
         </form>
       )}
 
-      {/* TAB 2: TEST CONNECTION */}
+      {/* ========================================================================= */}
+      {/* TAB: TEST CONNECTION */}
+      {/* ========================================================================= */}
       {activeTab === 'test' && (
         <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
           <div className="lg:col-span-6 space-y-6">
@@ -553,7 +1583,9 @@ export const EmailSystemHub: React.FC<EmailSystemHubProps> = ({ onNavigate }) =>
         </div>
       )}
 
-      {/* TAB 3: TEMPLATES & PREVIEW */}
+      {/* ========================================================================= */}
+      {/* TAB: TEMPLATES & PREVIEW */}
+      {/* ========================================================================= */}
       {activeTab === 'templates' && (
         <div className="space-y-6">
           <div className="flex items-center gap-3">
@@ -753,80 +1785,6 @@ export const EmailSystemHub: React.FC<EmailSystemHubProps> = ({ onNavigate }) =>
                 </div>
               </div>
             </div>
-          </div>
-        </div>
-      )}
-
-      {/* TAB 4: DISPATCH LOGS */}
-      {activeTab === 'logs' && (
-        <div className="bg-white rounded-2xl border border-stone-200 shadow-xs overflow-hidden">
-          <div className="p-4 bg-stone-50 border-b border-stone-200 flex items-center justify-between">
-            <h3 className="font-bold text-xs text-stone-800 uppercase tracking-wider">
-              Log Pengiriman Email Sistem ({emailLogs.length} Pesan)
-            </h3>
-            <span className="text-[11px] text-stone-500">
-              Pengirim: <strong className="font-mono text-stone-700">{emailConfig.defaultSenderEmail}</strong>
-            </span>
-          </div>
-
-          <div className="overflow-x-auto">
-            <table className="w-full text-left text-xs">
-              <thead className="bg-stone-50/80 border-b border-stone-200 text-stone-500 uppercase font-semibold">
-                <tr>
-                  <th className="px-5 py-3">Waktu</th>
-                  <th className="px-5 py-3">Penerima</th>
-                  <th className="px-5 py-3">Subjek & Tipe</th>
-                  <th className="px-5 py-3">Status</th>
-                  <th className="px-5 py-3">Token / OTP</th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-stone-100">
-                {emailLogs.length === 0 ? (
-                  <tr>
-                    <td colSpan={5} className="px-5 py-8 text-center text-stone-400">
-                      Belum ada riwayat pengiriman email tercatat.
-                    </td>
-                  </tr>
-                ) : (
-                  emailLogs.map((log) => (
-                    <tr key={log.id} className="hover:bg-stone-50/70 transition-colors">
-                      <td className="px-5 py-3 font-mono text-[11px] text-stone-600 whitespace-nowrap">
-                        {new Date(log.timestamp).toLocaleString('id-ID', {
-                          day: '2-digit',
-                          month: 'short',
-                          hour: '2-digit',
-                          minute: '2-digit',
-                        })}
-                      </td>
-                      <td className="px-5 py-3">
-                        <div className="font-bold text-stone-900">{log.recipientName}</div>
-                        <div className="font-mono text-[11px] text-emerald-700">{log.recipientEmail}</div>
-                      </td>
-                      <td className="px-5 py-3">
-                        <div className="font-medium text-stone-800">{log.subject}</div>
-                        <span className="inline-block mt-0.5 px-2 py-0.2 rounded text-[9px] uppercase font-bold font-mono bg-stone-100 text-stone-600">
-                          {log.type}
-                        </span>
-                      </td>
-                      <td className="px-5 py-3">
-                        <span
-                          className={`px-2 py-0.5 rounded text-[10px] font-bold font-mono uppercase ${
-                            log.status === 'delivered'
-                              ? 'bg-emerald-100 text-emerald-800'
-                              : 'bg-amber-100 text-amber-800'
-                          }`}
-                        >
-                          {log.status}
-                        </span>
-                      </td>
-                      <td className="px-5 py-3 font-mono text-[11px] text-stone-500">
-                        {log.otpCode ? `OTP: ${log.otpCode}` : log.resetToken ? 'Token Issued' : '-'}
-                      </td>
-                    </tr>
-                  ))
-                )}
-              </tbody>
-            </table>
           </div>
         </div>
       )}

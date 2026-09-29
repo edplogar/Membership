@@ -434,14 +434,28 @@ export interface EmailMessageLog {
   recipientEmail: string;
   recipientName: string;
   subject: string;
-  type: 'welcome' | 'password_reset' | 'test' | 'notification' | 'broadcast';
-  status: 'sent' | 'delivered' | 'failed' | 'queued';
+  type: 'welcome' | 'password_reset' | 'test' | 'notification' | 'tier_upgrade' | 'points_update' | 'broadcast';
+  status: 'sent' | 'delivered' | 'failed' | 'queued' | 'retrying';
   senderEmail: string;
   timestamp: string;
   resetToken?: string;
   otpCode?: string;
   previewText?: string;
   errorMessage?: string;
+  rawError?: string;
+  errorCode?: string;
+  latencyMs?: number;
+  smtpHost?: string;
+  retryCount?: number;
+  lastRetriedAt?: string;
+  memberId?: string;
+  membershipNumber?: string;
+  deliveryDetails?: {
+    messageId?: string;
+    smtpResponse?: string;
+    acceptedRecipients?: string[];
+    rejectedRecipients?: string[];
+  };
 }
 
 export interface IntegrationStatus {

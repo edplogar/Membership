@@ -61,6 +61,11 @@ import {
   sendWelcomeEmail,
   sendPasswordResetEmail,
   testEmailConnection,
+  resendDispatchedEmail,
+  clearServerEmailLogs,
+  sendTierUpgradeEmail,
+  sendPointUpdateEmail,
+  sendMemberCustomNotificationEmail,
 } from '../services/emailService';
 import {
   calculatePointsEarned,
@@ -153,6 +158,11 @@ interface AppContextValue {
   updateEmailConfig: (config: Partial<EmailSystemConfig>) => void;
   addEmailLog: (log: EmailMessageLog) => void;
   sendTestEmailToRecipient: (recipientEmail: string) => Promise<{ success: boolean; message: string }>;
+  resendEmailNotification: (logId: string) => Promise<{ success: boolean; message: string }>;
+  clearEmailLogs: () => Promise<boolean>;
+  sendMemberNotificationEmail: (recipientEmail: string, recipientName: string, subject: string, messageText: string, membershipNumber?: string) => Promise<EmailMessageLog>;
+  sendMemberTierUpgradeEmail: (member: Member, oldTier: MembershipTier, newTier: MembershipTier) => Promise<EmailMessageLog>;
+  sendMemberPointsEmail: (member: Member, pointsChange: number, currentBalance: number, activityName: string) => Promise<EmailMessageLog>;
 
   updateRolePermissions: (roleId: string, permissions: PermissionCode[]) => void;
   saveUser: (user: User) => void;
@@ -1069,6 +1079,74 @@ export function AppProvider({ children }: { children: ReactNode }) {
     return result;
   };
 
+  const resendEmailNotification = async (logId: string): Promise<{ success: boolean; message: string }> => {
+    const result = await resendDispatchedEmail(logId, emailConfig);
+    if (result.log) {
+      setEmailLogs((prev) =>
+        prev.map((l) => (l.id === logId ? { ...l, ...result.log } : l))
+      );
+      try {
+        setDoc(doc(db, 'email_logs', logId), result.log).catch(() => {});
+      } catch {}
+    }
+    if (result.success) {
+      showToast(result.message, 'success');
+    } else {
+      showToast(result.message, 'error');
+    }
+    return result;
+  };
+
+  const clearEmailLogs = async (): Promise<boolean> => {
+    const ok = await clearServerEmailLogs();
+    setEmailLogs([]);
+    showToast('Seluruh riwayat log pengiriman email berhasil dibersihkan.', 'info');
+    return ok;
+  };
+
+  const sendMemberNotificationEmail = async (
+    recipientEmail: string,
+    recipientName: string,
+    subject: string,
+    messageText: string,
+    membershipNumber?: string
+  ): Promise<EmailMessageLog> => {
+    const log = await sendMemberCustomNotificationEmail(
+      recipientEmail,
+      recipientName,
+      subject,
+      messageText,
+      emailConfig,
+      membershipNumber
+    );
+    addEmailLog(log);
+    showToast(`Notifikasi email berhasil dikirim ke ${recipientEmail}`, 'success');
+    return log;
+  };
+
+  const sendMemberTierUpgradeEmail = async (
+    member: Member,
+    oldTier: MembershipTier,
+    newTier: MembershipTier
+  ): Promise<EmailMessageLog> => {
+    const log = await sendTierUpgradeEmail(member, oldTier, newTier, emailConfig);
+    addEmailLog(log);
+    showToast(`Email notifikasi kenaikan tier (${newTier.name}) dikirim ke ${member.email}`, 'success');
+    return log;
+  };
+
+  const sendMemberPointsEmail = async (
+    member: Member,
+    pointsChange: number,
+    currentBalance: number,
+    activityName: string
+  ): Promise<EmailMessageLog> => {
+    const log = await sendPointUpdateEmail(member, pointsChange, currentBalance, activityName, emailConfig);
+    addEmailLog(log);
+    showToast(`Email update poin dikirim ke ${member.email}`, 'info');
+    return log;
+  };
+
   // Role Permissions
   const updateRolePermissions = (roleId: string, permissions: PermissionCode[]) => {
     setRoles((prev) =>
@@ -1189,6 +1267,11 @@ export function AppProvider({ children }: { children: ReactNode }) {
         updateEmailConfig,
         addEmailLog,
         sendTestEmailToRecipient,
+        resendEmailNotification,
+        clearEmailLogs,
+        sendMemberNotificationEmail,
+        sendMemberTierUpgradeEmail,
+        sendMemberPointsEmail,
         updateRolePermissions,
         saveUser,
         deleteUser,
