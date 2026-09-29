@@ -37,13 +37,20 @@ import { RolePermissionsMatrix } from './components/superadmin/RolePermissionsMa
 import { SystemSettingsView } from './components/superadmin/SystemSettingsView';
 import { WhatsAppCRMHub } from './components/superadmin/WhatsAppCRMHub';
 
-// Modals
+// Modals & Auth
 import { GlobalSearchModal } from './components/common/GlobalSearchModal';
 import { AuthModal } from './components/auth/AuthModal';
+import { LoginPage } from './components/auth/LoginPage';
+import { LombokGardenLogo } from './components/common/LombokGardenLogo';
 
 function MainApp() {
   const { currentUser, currentMember, userRole } = useAuth();
   const { tiers, members } = useApp();
+
+  // If user is not authenticated, show Multi-User LoginPage
+  if (!currentUser) {
+    return <LoginPage />;
+  }
 
   // Active navigation tab
   const [activeTab, setActiveTab] = useState<string>(() =>
@@ -320,10 +327,10 @@ function MainApp() {
       {/* 8. Quiet Editorial Footer */}
       <footer className="border-t border-stone-200 bg-white py-6 text-xs text-stone-500">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 flex flex-col sm:flex-row items-center justify-between gap-3">
-          <div className="flex items-center gap-2">
-            <span className="font-serif-luxury font-bold text-stone-800">
-              Lombok Garden Hotel
-            </span>
+          <div className="flex items-center gap-3">
+            <div className="p-1 px-2.5 rounded-xl bg-white shadow-xs border border-stone-200">
+              <LombokGardenLogo variant="horizontal" size="sm" />
+            </div>
             <span>·</span>
             <span>Hotel Membership Management System</span>
           </div>

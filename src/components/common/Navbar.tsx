@@ -1,12 +1,14 @@
 import React, { useState } from 'react';
 import { useAuth } from '../../context/AuthContext';
 import { useApp } from '../../context/AppContext';
+import { LombokGardenLogo } from './LombokGardenLogo';
 import {
   Bell,
   LogOut,
   User,
   Search,
   Check,
+  LogIn,
 } from 'lucide-react';
 
 interface NavbarProps {
@@ -14,6 +16,7 @@ interface NavbarProps {
   onTabChange: (tab: string) => void;
   onOpenScanner: () => void;
   onSearchClick: () => void;
+  onOpenLogin?: () => void;
 }
 
 export const Navbar: React.FC<NavbarProps> = ({
@@ -21,8 +24,9 @@ export const Navbar: React.FC<NavbarProps> = ({
   onTabChange,
   onOpenScanner,
   onSearchClick,
+  onOpenLogin,
 }) => {
-  const { currentUser, userRole, logout } = useAuth();
+  const { currentUser, userRole, logout, isAuthenticated } = useAuth();
   const { notifications, markNotificationRead, markAllNotificationsRead } = useApp();
   const [showNotifications, setShowNotifications] = useState(false);
   const [showUserMenu, setShowUserMenu] = useState(false);
@@ -74,14 +78,15 @@ export const Navbar: React.FC<NavbarProps> = ({
   return (
     <header className="sticky top-8 z-30 bg-stone-900/95 backdrop-blur-md border-b border-stone-800 text-stone-100">
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 h-16 flex items-center justify-between gap-4">
-        {/* Zone 1: Single text element wordmark */}
+        {/* Zone 1: Official Lombok Garden Hotel Logo (Preserving exact shape & #00A651 color) */}
         <button
           onClick={() => onTabChange(userRole === 'MEMBER' ? 'dashboard' : userRole === 'ADMIN' ? 'admin_dashboard' : 'super_dashboard')}
-          className="text-left group cursor-pointer focus:outline-hidden"
+          className="text-left group cursor-pointer focus:outline-hidden py-1"
+          title="Lombok Garden Hotel"
         >
-          <span className="font-serif-luxury text-base sm:text-lg font-bold tracking-wider text-stone-100 group-hover:text-amber-400 transition-colors whitespace-nowrap">
-            Lombok Garden Hotel
-          </span>
+          <div className="p-1 px-2.5 bg-white rounded-xl shadow-xs border border-stone-200 hover:border-emerald-300 transition-colors">
+            <LombokGardenLogo variant="horizontal" size="sm" />
+          </div>
         </button>
 
         {/* Zone 2: 4–6 clean text navigation links */}
@@ -202,60 +207,78 @@ export const Navbar: React.FC<NavbarProps> = ({
             )}
           </div>
 
-          {/* User Profile / Menu */}
-          <div className="relative">
-            <button
-              onClick={() => setShowUserMenu(!showUserMenu)}
-              className="flex items-center gap-2 p-1.5 rounded-lg hover:bg-stone-800 text-stone-200 transition-colors"
-            >
-              <div className="w-7 h-7 rounded-full bg-emerald-800 border border-emerald-600 flex items-center justify-center text-xs font-bold text-emerald-200">
-                {currentUser?.name ? currentUser.name.charAt(0) : 'U'}
-              </div>
-              <span className="hidden md:inline text-xs font-medium text-stone-200 max-w-[120px] truncate">
-                {currentUser?.name?.split(' ')[0]}
-              </span>
-            </button>
+          {/* User Profile / Menu or Login Button */}
+          {isAuthenticated && currentUser ? (
+            <div className="relative">
+              <button
+                onClick={() => setShowUserMenu(!showUserMenu)}
+                className="flex items-center gap-2 p-1.5 rounded-lg hover:bg-stone-800 text-stone-200 transition-colors cursor-pointer"
+              >
+                {currentUser?.avatar ? (
+                  <img
+                    src={currentUser.avatar}
+                    alt={currentUser.name}
+                    className="w-7 h-7 rounded-full object-cover border border-emerald-500"
+                  />
+                ) : (
+                  <div className="w-7 h-7 rounded-full bg-emerald-800 border border-emerald-600 flex items-center justify-center text-xs font-bold text-emerald-200">
+                    {currentUser?.name ? currentUser.name.charAt(0) : 'U'}
+                  </div>
+                )}
+                <span className="hidden md:inline text-xs font-medium text-stone-200 max-w-[120px] truncate">
+                  {currentUser?.name?.split(' ')[0]}
+                </span>
+              </button>
 
-            {showUserMenu && (
-              <div className="absolute right-0 mt-2 w-56 bg-stone-900 border border-stone-700 rounded-xl shadow-2xl py-1 z-50 animate-in fade-in">
-                <div className="px-3.5 py-2.5 border-b border-stone-800">
-                  <div className="text-xs font-semibold text-stone-100 truncate">
-                    {currentUser?.name}
+              {showUserMenu && (
+                <div className="absolute right-0 mt-2 w-56 bg-stone-900 border border-stone-700 rounded-xl shadow-2xl py-1 z-50 animate-in fade-in">
+                  <div className="px-3.5 py-2.5 border-b border-stone-800">
+                    <div className="text-xs font-semibold text-stone-100 truncate">
+                      {currentUser?.name}
+                    </div>
+                    <div className="text-[10px] text-stone-400 truncate">
+                      {currentUser?.email}
+                    </div>
+                    <div className="text-[10px] font-mono text-amber-400 mt-1 uppercase font-semibold">
+                      {userRole}
+                    </div>
                   </div>
-                  <div className="text-[10px] text-stone-400 truncate">
-                    {currentUser?.email}
-                  </div>
-                  <div className="text-[10px] font-mono text-amber-400 mt-1 uppercase font-semibold">
-                    {userRole}
-                  </div>
-                </div>
 
-                {userRole === 'MEMBER' && (
+                  {userRole === 'MEMBER' && (
+                    <button
+                      onClick={() => {
+                        onTabChange('profile');
+                        setShowUserMenu(false);
+                      }}
+                      className="w-full px-3.5 py-2 text-left hover:bg-stone-800 text-xs text-stone-200 flex items-center gap-2 transition-colors cursor-pointer"
+                    >
+                      <User className="w-3.5 h-3.5 text-stone-400" />
+                      <span>Profil Saya</span>
+                    </button>
+                  )}
+
                   <button
                     onClick={() => {
-                      onTabChange('profile');
+                      logout();
                       setShowUserMenu(false);
                     }}
-                    className="w-full px-3.5 py-2 text-left hover:bg-stone-800 text-xs text-stone-200 flex items-center gap-2 transition-colors"
+                    className="w-full px-3.5 py-2 text-left hover:bg-stone-800 text-xs text-rose-400 flex items-center gap-2 transition-colors cursor-pointer"
                   >
-                    <User className="w-3.5 h-3.5 text-stone-400" />
-                    Profil Saya
+                    <LogOut className="w-3.5 h-3.5" />
+                    <span>Keluar / Logout</span>
                   </button>
-                )}
-
-                <button
-                  onClick={() => {
-                    logout();
-                    setShowUserMenu(false);
-                  }}
-                  className="w-full px-3.5 py-2 text-left hover:bg-stone-800 text-xs text-rose-400 flex items-center gap-2 transition-colors"
-                >
-                  <LogOut className="w-3.5 h-3.5" />
-                  Keluar Akun
-                </button>
-              </div>
-            )}
-          </div>
+                </div>
+              )}
+            </div>
+          ) : (
+            <button
+              onClick={onOpenLogin}
+              className="px-3.5 py-2 rounded-xl bg-[#00A651] hover:bg-[#009647] text-white text-xs font-bold flex items-center gap-1.5 transition-colors shadow-xs cursor-pointer"
+            >
+              <LogIn className="w-3.5 h-3.5" />
+              <span>Masuk Akun</span>
+            </button>
+          )}
         </div>
       </div>
 

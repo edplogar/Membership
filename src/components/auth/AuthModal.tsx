@@ -3,7 +3,9 @@ import { useAuth } from '../../context/AuthContext';
 import { useApp } from '../../context/AppContext';
 import { useToast } from '../../context/ToastContext';
 import { Modal } from '../common/Modal';
-import { Lock, Mail, User, Phone, Sparkles, CheckCircle2 } from 'lucide-react';
+import { LombokGardenLogo } from '../common/LombokGardenLogo';
+import { signInWithGoogleAccount } from '../../services/firebase';
+import { Lock, Mail, User, Phone, CheckCircle2, AlertCircle } from 'lucide-react';
 
 interface AuthModalProps {
   isOpen: boolean;
@@ -16,15 +18,15 @@ export const AuthModal: React.FC<AuthModalProps> = ({
   onClose,
   defaultMode = 'login',
 }) => {
-  const { login, switchDemoRole } = useAuth();
+  const { login, loginWithGoogle } = useAuth();
   const { addMember } = useApp();
   const { showToast } = useToast();
 
   const [mode, setMode] = useState<'login' | 'register' | 'forgot'>(defaultMode);
-
-  // Login form state
-  const [loginEmail, setLoginEmail] = useState('superadmin@lombokgardenhotel.com');
-  const [loginPassword, setLoginPassword] = useState('demo123');
+  const [loginEmail, setLoginEmail] = useState('');
+  const [loginPassword, setLoginPassword] = useState('');
+  const [isGoogleLoading, setIsGoogleLoading] = useState(false);
+  const [errorMessage, setErrorMessage] = useState<string | null>(null);
 
   // Register form state
   const [regForm, setRegForm] = useState({
@@ -43,19 +45,56 @@ export const AuthModal: React.FC<AuthModalProps> = ({
 
   const handleLoginSubmit = (e: React.FormEvent) => {
     e.preventDefault();
-    const success = login(loginEmail);
+    setErrorMessage(null);
+    if (!loginEmail.trim() || !loginPassword.trim()) {
+      setErrorMessage('Harap masukkan email dan kata sandi Anda.');
+      return;
+    }
+
+    const success = login(loginEmail.trim(), loginPassword);
     if (success) {
-      showToast('Berhasil masuk ke sistem!', 'success');
+      showToast('Berhasil masuk ke sistem Lombok Garden Hotel!', 'success');
       onClose();
     } else {
-      showToast('Email atau kata sandi tidak cocok. Gunakan kredensial demo.', 'error');
+      setErrorMessage('Email atau kata sandi tidak cocok. Silakan periksa kembali akun Anda.');
+    }
+  };
+
+  const handleGoogleSignIn = async () => {
+    setErrorMessage(null);
+    setIsGoogleLoading(true);
+
+    try {
+      const res = await signInWithGoogleAccount();
+      if (res.success && res.user && res.user.email) {
+        const loggedIn = loginWithGoogle(
+          res.user.email,
+          res.user.displayName || undefined,
+          res.user.photoURL || undefined
+        );
+
+        if (loggedIn) {
+          showToast(`Verifikasi Google berhasil! Selamat datang, ${res.user.displayName || res.user.email}`, 'success');
+          onClose();
+        } else {
+          setErrorMessage('Akun Google berhasil diverifikasi namun status akun tidak aktif.');
+        }
+      } else {
+        setErrorMessage(res.error || 'Verifikasi akun Google dibatalkan atau gagal.');
+      }
+    } catch (err: unknown) {
+      const errText = err instanceof Error ? err.message : String(err);
+      setErrorMessage(`Kendala autentikasi Google: ${errText}`);
+    } finally {
+      setIsGoogleLoading(false);
     }
   };
 
   const handleRegisterSubmit = (e: React.FormEvent) => {
     e.preventDefault();
+    setErrorMessage(null);
     if (!regForm.fullName || !regForm.email || !regForm.phone) {
-      showToast('Harap lengkapi semua field bertanda bintang.', 'error');
+      setErrorMessage('Harap lengkapi nama lengkap, email, dan nomor WhatsApp.');
       return;
     }
 
@@ -63,10 +102,10 @@ export const AuthModal: React.FC<AuthModalProps> = ({
     const end = new Date(Date.now() + 24 * 30 * 86400000).toISOString().slice(0, 10);
 
     const newMember = addMember({
-      fullName: regForm.fullName,
-      nickname: regForm.fullName.split(' ')[0],
-      email: regForm.email,
-      phone: regForm.phone,
+      fullName: regForm.fullName.trim(),
+      nickname: regForm.fullName.trim().split(' ')[0],
+      email: regForm.email.trim().toLowerCase(),
+      phone: regForm.phone.trim(),
       gender: regForm.gender,
       birthDate: regForm.birthDate,
       address: regForm.address,
@@ -80,10 +119,9 @@ export const AuthModal: React.FC<AuthModalProps> = ({
       membershipEndDate: end,
       referralCode: `${regForm.fullName.slice(0, 4).toUpperCase()}-LGH`,
       status: 'ACTIVE',
-      internalNotes: 'Pendaftaran mandiri melalui portal publik hotel.',
+      internalNotes: 'Pendaftaran mandiri melalui portal web.',
     });
 
-    // Auto-login to new member
     login(newMember.email);
     showToast('Registrasi berhasil! Selamat bergabung di Lombok Garden Hotel.', 'success');
     onClose();
@@ -93,147 +131,156 @@ export const AuthModal: React.FC<AuthModalProps> = ({
     <Modal
       isOpen={isOpen}
       onClose={onClose}
-      title={
-        mode === 'login'
-          ? 'Masuk ke Portal Keanggotaan'
-          : mode === 'register'
-          ? 'Pendaftaran Member Baru Lombok Garden'
-          : 'Lupa Kata Sandi'
-      }
-      subtitle={
-        mode === 'login'
-          ? 'Silakan masuk menggunakan akun Member atau Staf Administrator'
-          : mode === 'register'
-          ? 'Daftar gratis untuk menikmati diskon kamar dan poin reward istimewa'
-          : 'Masukkan email untuk menerima instruksi reset'
-      }
+      title=""
       maxWidth="md"
     >
-      <div className="space-y-5">
-        {/* Quick Demo Credentials Autofill */}
-        {mode === 'login' && (
-          <div className="p-3.5 bg-stone-50 rounded-xl border border-stone-200 space-y-2">
-            <div className="text-[10px] font-bold uppercase tracking-wider text-stone-500 flex items-center gap-1.5">
-              <Sparkles className="w-3.5 h-3.5 text-amber-600" />
-              <span>Pilih Kredensial Demo Cepat:</span>
-            </div>
-            <div className="grid grid-cols-3 gap-2 text-xs">
-              <button
-                type="button"
-                onClick={() => {
-                  setLoginEmail('superadmin@lombokgardenhotel.com');
-                  setLoginPassword('demo123');
-                }}
-                className="p-2 rounded-lg bg-white hover:bg-stone-100 border border-stone-200 text-stone-800 text-left transition-colors"
-              >
-                <div className="font-bold text-[11px]">Super Admin</div>
-                <div className="text-[9px] text-stone-400 truncate">Hendra Wijaya</div>
-              </button>
+      <div className="space-y-5 -mt-2">
+        {/* Official Brand Header */}
+        <div className="flex flex-col items-center text-center pb-3 border-b border-stone-100">
+          <LombokGardenLogo variant="vertical" size="md" />
+          <h3 className="font-serif text-lg font-bold text-stone-900 mt-2">
+            {mode === 'login' && 'Masuk ke Portal Keanggotaan'}
+            {mode === 'register' && 'Pendaftaran Member Baru'}
+            {mode === 'forgot' && 'Pemulihan Kata Sandi'}
+          </h3>
+          <p className="text-xs text-stone-500 max-w-sm mt-0.5">
+            {mode === 'login' && 'Masukkan kredensial akun Anda atau gunakan verifikasi Akun Google.'}
+            {mode === 'register' && 'Daftar gratis untuk menikmati diskon kamar dan poin reward istimewa.'}
+            {mode === 'forgot' && 'Masukkan email terdaftar untuk menerima instruksi reset.'}
+          </p>
+        </div>
 
-              <button
-                type="button"
-                onClick={() => {
-                  setLoginEmail('admin@lombokgardenhotel.com');
-                  setLoginPassword('demo123');
-                }}
-                className="p-2 rounded-lg bg-white hover:bg-stone-100 border border-stone-200 text-stone-800 text-left transition-colors"
-              >
-                <div className="font-bold text-[11px]">Hotel Admin</div>
-                <div className="text-[9px] text-stone-400 truncate">Siti Rahmawati</div>
-              </button>
-
-              <button
-                type="button"
-                onClick={() => {
-                  setLoginEmail('member@example.com');
-                  setLoginPassword('demo123');
-                }}
-                className="p-2 rounded-lg bg-white hover:bg-stone-100 border border-stone-200 text-stone-800 text-left transition-colors"
-              >
-                <div className="font-bold text-[11px]">Member (Gold)</div>
-                <div className="text-[9px] text-stone-400 truncate">Johnathan Doe</div>
-              </button>
-            </div>
+        {errorMessage && (
+          <div className="p-3 rounded-xl bg-rose-50 border border-rose-200 text-rose-800 text-xs flex items-start gap-2">
+            <AlertCircle className="w-4 h-4 text-rose-600 shrink-0 mt-0.5" />
+            <div>{errorMessage}</div>
           </div>
         )}
 
         {/* LOGIN FORM */}
         {mode === 'login' && (
-          <form onSubmit={handleLoginSubmit} className="space-y-4">
-            <div>
-              <label className="block text-xs font-semibold text-stone-700 mb-1">
-                Alamat Email
-              </label>
-              <div className="relative">
-                <Mail className="w-4 h-4 text-stone-400 absolute left-3 top-1/2 -translate-y-1/2" />
-                <input
-                  type="email"
-                  value={loginEmail}
-                  onChange={(e) => setLoginEmail(e.target.value)}
-                  className="w-full pl-9 pr-4 py-2 bg-stone-50 border border-stone-200 rounded-xl text-xs focus:ring-2 focus:ring-emerald-700/20"
-                  required
-                />
-              </div>
-            </div>
-
-            <div>
-              <div className="flex items-center justify-between mb-1">
-                <label className="block text-xs font-semibold text-stone-700">
-                  Kata Sandi
-                </label>
-                <button
-                  type="button"
-                  onClick={() => setMode('forgot')}
-                  className="text-[11px] text-stone-400 hover:text-emerald-800 font-medium"
-                >
-                  Lupa kata sandi?
-                </button>
-              </div>
-              <div className="relative">
-                <Lock className="w-4 h-4 text-stone-400 absolute left-3 top-1/2 -translate-y-1/2" />
-                <input
-                  type="password"
-                  value={loginPassword}
-                  onChange={(e) => setLoginPassword(e.target.value)}
-                  className="w-full pl-9 pr-4 py-2 bg-stone-50 border border-stone-200 rounded-xl text-xs focus:ring-2 focus:ring-emerald-700/20"
-                  required
-                />
-              </div>
-            </div>
-
+          <div className="space-y-4">
+            {/* Google Verification */}
             <button
-              type="submit"
-              className="w-full py-2.5 bg-stone-900 hover:bg-stone-800 text-white rounded-xl text-xs font-semibold shadow-xs transition-colors"
+              type="button"
+              onClick={handleGoogleSignIn}
+              disabled={isGoogleLoading}
+              className="w-full py-2.5 px-4 rounded-xl border border-stone-300 hover:border-stone-400 bg-white hover:bg-stone-50 text-stone-800 text-xs font-bold flex items-center justify-center gap-2.5 transition-all shadow-xs cursor-pointer disabled:opacity-50"
             >
-              Masuk Sekarang
+              <svg className="w-4 h-4" viewBox="0 0 24 24">
+                <path
+                  fill="#4285F4"
+                  d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z"
+                />
+                <path
+                  fill="#34A853"
+                  d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z"
+                />
+                <path
+                  fill="#FBBC05"
+                  d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.06H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.94l2.85-2.22.81-.63z"
+                />
+                <path
+                  fill="#EA4335"
+                  d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.06l3.66 2.84c.87-2.6 3.3-4.52 6.16-4.52z"
+                />
+              </svg>
+              <span>{isGoogleLoading ? 'Memverifikasi Google...' : 'Verifikasi dengan Akun Google'}</span>
             </button>
 
-            <div className="text-center pt-2 text-xs text-stone-500">
-              Belum memiliki kartu member?{' '}
+            <div className="relative my-3">
+              <div className="absolute inset-0 flex items-center">
+                <div className="w-full border-t border-stone-200" />
+              </div>
+              <div className="relative flex justify-center text-[10px] uppercase font-bold tracking-wider">
+                <span className="bg-white px-2.5 text-stone-400">atau email & sandi</span>
+              </div>
+            </div>
+
+            <form onSubmit={handleLoginSubmit} className="space-y-3.5">
+              <div>
+                <label className="block text-xs font-semibold text-stone-700 mb-1">
+                  Alamat Email
+                </label>
+                <div className="relative">
+                  <Mail className="w-4 h-4 text-stone-400 absolute left-3 top-1/2 -translate-y-1/2" />
+                  <input
+                    type="email"
+                    value={loginEmail}
+                    onChange={(e) => setLoginEmail(e.target.value)}
+                    placeholder="nama@email.com"
+                    className="w-full pl-9 pr-4 py-2.5 bg-stone-50 border border-stone-200 rounded-xl text-xs focus:ring-2 focus:ring-[#00A651]/20 focus:border-[#00A651]"
+                    required
+                  />
+                </div>
+              </div>
+
+              <div>
+                <div className="flex items-center justify-between mb-1">
+                  <label className="text-xs font-semibold text-stone-700">
+                    Kata Sandi
+                  </label>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setMode('forgot');
+                      setErrorMessage(null);
+                    }}
+                    className="text-[11px] text-[#00A651] hover:underline"
+                  >
+                    Lupa sandi?
+                  </button>
+                </div>
+                <div className="relative">
+                  <Lock className="w-4 h-4 text-stone-400 absolute left-3 top-1/2 -translate-y-1/2" />
+                  <input
+                    type="password"
+                    value={loginPassword}
+                    onChange={(e) => setLoginPassword(e.target.value)}
+                    placeholder="••••••••"
+                    className="w-full pl-9 pr-4 py-2.5 bg-stone-50 border border-stone-200 rounded-xl text-xs focus:ring-2 focus:ring-[#00A651]/20 focus:border-[#00A651]"
+                    required
+                  />
+                </div>
+              </div>
+
+              <button
+                type="submit"
+                className="w-full py-2.5 bg-[#00A651] hover:bg-[#009647] text-white rounded-xl text-xs font-bold transition-colors shadow-xs cursor-pointer"
+              >
+                Masuk ke Akun
+              </button>
+            </form>
+
+            <div className="pt-2 text-center text-xs text-stone-600">
+              Belum memiliki akun?{' '}
               <button
                 type="button"
-                onClick={() => setMode('register')}
-                className="text-emerald-800 font-bold hover:underline"
+                onClick={() => {
+                  setMode('register');
+                  setErrorMessage(null);
+                }}
+                className="font-bold text-[#00A651] hover:underline cursor-pointer"
               >
-                Daftar Gratis
+                Daftar Member Baru
               </button>
             </div>
-          </form>
+          </div>
         )}
 
         {/* REGISTER FORM */}
         {mode === 'register' && (
-          <form onSubmit={handleRegisterSubmit} className="space-y-3">
+          <form onSubmit={handleRegisterSubmit} className="space-y-3.5">
             <div>
               <label className="block text-xs font-semibold text-stone-700 mb-1">
-                Nama Lengkap Sesuai KTP/Paspor *
+                Nama Lengkap *
               </label>
               <input
                 type="text"
                 value={regForm.fullName}
                 onChange={(e) => setRegForm({ ...regForm, fullName: e.target.value })}
-                placeholder="Nama Anda"
-                className="w-full px-3 py-2 bg-stone-50 border border-stone-200 rounded-xl text-xs"
+                placeholder="Sesuai KTP / Paspor"
+                className="w-full px-3.5 py-2 bg-stone-50 border border-stone-200 rounded-xl text-xs focus:ring-2 focus:ring-[#00A651]/20 focus:border-[#00A651]"
                 required
               />
             </div>
@@ -247,70 +294,45 @@ export const AuthModal: React.FC<AuthModalProps> = ({
                   type="email"
                   value={regForm.email}
                   onChange={(e) => setRegForm({ ...regForm, email: e.target.value })}
-                  placeholder="email@example.com"
-                  className="w-full px-3 py-2 bg-stone-50 border border-stone-200 rounded-xl text-xs"
+                  placeholder="nama@email.com"
+                  className="w-full px-3.5 py-2 bg-stone-50 border border-stone-200 rounded-xl text-xs focus:ring-2 focus:ring-[#00A651]/20 focus:border-[#00A651]"
                   required
                 />
               </div>
 
               <div>
                 <label className="block text-xs font-semibold text-stone-700 mb-1">
-                  Nomor HP / WhatsApp *
+                  WhatsApp *
                 </label>
                 <input
-                  type="tel"
+                  type="text"
                   value={regForm.phone}
                   onChange={(e) => setRegForm({ ...regForm, phone: e.target.value })}
-                  placeholder="+62 812-xxxx"
-                  className="w-full px-3 py-2 bg-stone-50 border border-stone-200 rounded-xl text-xs"
+                  placeholder="0812xxxx"
+                  className="w-full px-3.5 py-2 bg-stone-50 border border-stone-200 rounded-xl text-xs focus:ring-2 focus:ring-[#00A651]/20 focus:border-[#00A651]"
                   required
                 />
-              </div>
-            </div>
-
-            <div className="grid grid-cols-2 gap-3">
-              <div>
-                <label className="block text-xs font-semibold text-stone-700 mb-1">
-                  Tanggal Lahir
-                </label>
-                <input
-                  type="date"
-                  value={regForm.birthDate}
-                  onChange={(e) => setRegForm({ ...regForm, birthDate: e.target.value })}
-                  className="w-full px-3 py-2 bg-stone-50 border border-stone-200 rounded-xl text-xs"
-                />
-              </div>
-
-              <div>
-                <label className="block text-xs font-semibold text-stone-700 mb-1">
-                  Jenis Kelamin
-                </label>
-                <select
-                  value={regForm.gender}
-                  onChange={(e: any) => setRegForm({ ...regForm, gender: e.target.value })}
-                  className="w-full px-3 py-2 bg-stone-50 border border-stone-200 rounded-xl text-xs"
-                >
-                  <option value="L">Laki-laki</option>
-                  <option value="P">Perempuan</option>
-                </select>
               </div>
             </div>
 
             <button
               type="submit"
-              className="w-full py-2.5 bg-emerald-800 hover:bg-emerald-900 text-white rounded-xl text-xs font-semibold shadow-xs transition-colors mt-2"
+              className="w-full py-2.5 bg-[#00A651] hover:bg-[#009647] text-white rounded-xl text-xs font-bold transition-colors shadow-xs cursor-pointer"
             >
-              Daftar & Terbitkan Kartu Digital
+              Daftar & Dapatkan Kartu Digital
             </button>
 
-            <div className="text-center pt-2 text-xs text-stone-500">
-              Sudah memiliki akun?{' '}
+            <div className="text-center text-xs text-stone-600">
+              Sudah punya akun?{' '}
               <button
                 type="button"
-                onClick={() => setMode('login')}
-                className="text-stone-900 font-bold hover:underline"
+                onClick={() => {
+                  setMode('login');
+                  setErrorMessage(null);
+                }}
+                className="font-bold text-[#00A651] hover:underline cursor-pointer"
               >
-                Masuk
+                Masuk di sini
               </button>
             </div>
           </form>
@@ -318,34 +340,20 @@ export const AuthModal: React.FC<AuthModalProps> = ({
 
         {/* FORGOT PASSWORD */}
         {mode === 'forgot' && (
-          <div className="space-y-4">
+          <div className="space-y-3.5 text-center">
             <p className="text-xs text-stone-600">
-              Masukkan alamat email Anda. Kami akan mengirimkan tautan untuk mengatur ulang kata sandi Anda.
+              Silakan hubungi Front Desk di <strong>(0370) 636015</strong> atau masukkan email Anda untuk bantuan reset kredensial.
             </p>
-            <input
-              type="email"
-              placeholder="nama@email.com"
-              className="w-full px-3 py-2 bg-stone-50 border border-stone-200 rounded-xl text-xs"
-            />
             <button
               type="button"
               onClick={() => {
-                showToast('Tautan instruksi pemulihan telah dikirim ke email.', 'success');
                 setMode('login');
+                setErrorMessage(null);
               }}
-              className="w-full py-2.5 bg-stone-900 text-white rounded-xl text-xs font-semibold"
+              className="w-full py-2 bg-stone-200 hover:bg-stone-300 text-stone-800 rounded-xl text-xs font-bold cursor-pointer"
             >
-              Kirim Tautan Reset
+              Kembali ke Login
             </button>
-            <div className="text-center">
-              <button
-                type="button"
-                onClick={() => setMode('login')}
-                className="text-xs text-stone-500 hover:text-stone-800"
-              >
-                Kembali ke Form Masuk
-              </button>
-            </div>
           </div>
         )}
       </div>

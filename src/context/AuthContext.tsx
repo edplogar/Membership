@@ -11,10 +11,12 @@ import {
 interface AuthContextValue {
   currentUser: User | null;
   currentMember: Member | null;
-  userRole: UserRoleType;
+  userRole: UserRoleType | null;
   roles: Role[];
+  isAuthenticated: boolean;
   hasPermission: (permission: PermissionCode) => boolean;
-  login: (email: string, roleHint?: UserRoleType) => boolean;
+  login: (email: string, password?: string) => boolean;
+  loginWithGoogle: (googleEmail: string, displayName?: string, photoURL?: string) => boolean;
   logout: () => void;
   switchDemoRole: (userIdOrRole: string) => void;
   updateCurrentUser: (updates: Partial<User>) => void;
@@ -34,22 +36,27 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     loadFromStorage<Member[]>('members', INITIAL_MEMBERS)
   );
 
-  // Default initial active user is Super Admin for full evaluation capabilities
-  const [currentUserId, setCurrentUserId] = useState<string>(() => {
-    return loadFromStorage<string>('auth_current_user_id', 'usr_superadmin');
+  // Active user session (null when logged out, defaults to initial user for immediate access or saved session)
+  const [currentUserId, setCurrentUserId] = useState<string | null>(() => {
+    return loadFromStorage<string | null>('auth_current_user_id', 'usr_superadmin');
   });
 
-  const currentUser = users.find((u) => u.id === currentUserId) || users[0];
-  const userRole = currentUser?.role || 'MEMBER';
+  const currentUser = currentUserId ? users.find((u) => u.id === currentUserId) || null : null;
+  const userRole = currentUser?.role || null;
+  const isAuthenticated = Boolean(currentUser);
 
   // If user is a member, get member details
   const currentMember =
-    userRole === 'MEMBER' && currentUser.memberId
+    userRole === 'MEMBER' && currentUser?.memberId
       ? members.find((m) => m.id === currentUser.memberId) || members[0]
       : null;
 
   useEffect(() => {
-    saveToStorage('auth_current_user_id', currentUserId);
+    if (currentUserId) {
+      saveToStorage('auth_current_user_id', currentUserId);
+    } else {
+      localStorage.removeItem('lgh_membership_auth_current_user_id');
+    }
   }, [currentUserId]);
 
   const hasPermission = (permission: PermissionCode): boolean => {
@@ -61,9 +68,10 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     return roleObj.permissions.includes(permission);
   };
 
-  const login = (email: string, _roleHint?: UserRoleType): boolean => {
+  const login = (email: string, _password?: string): boolean => {
+    const cleanEmail = email.toLowerCase().trim();
     const foundUser = users.find(
-      (u) => u.email.toLowerCase().trim() === email.toLowerCase().trim()
+      (u) => u.email.toLowerCase().trim() === cleanEmail
     );
 
     if (foundUser) {
@@ -74,7 +82,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
     // Check if it's a member email not yet in users table
     const foundMember = members.find(
-      (m) => m.email.toLowerCase().trim() === email.toLowerCase().trim()
+      (m) => m.email.toLowerCase().trim() === cleanEmail
     );
     if (foundMember) {
       const newMemberUser: User = {
@@ -98,9 +106,102 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     return false;
   };
 
+  const loginWithGoogle = (googleEmail: string, displayName?: string, photoURL?: string): boolean => {
+    const cleanEmail = googleEmail.toLowerCase().trim();
+
+    // 1. Check existing users table (staff / super admin / existing member user)
+    const existingUser = users.find((u) => u.email.toLowerCase().trim() === cleanEmail);
+    if (existingUser) {
+      if (!existingUser.isActive) return false;
+      if (photoURL && !existingUser.avatar) {
+        existingUser.avatar = photoURL;
+      }
+      setCurrentUserId(existingUser.id);
+      return true;
+    }
+
+    // 2. Check existing members table
+    const existingMember = members.find((m) => m.email.toLowerCase().trim() === cleanEmail);
+    if (existingMember) {
+      const newMemberUser: User = {
+        id: `usr_${existingMember.id}`,
+        email: existingMember.email,
+        name: displayName || existingMember.fullName,
+        role: 'MEMBER',
+        roleId: 'role_member',
+        memberId: existingMember.id,
+        avatar: photoURL,
+        phone: existingMember.phone,
+        isActive: true,
+        createdAt: new Date().toISOString(),
+      };
+      const updated = [...users, newMemberUser];
+      setUsers(updated);
+      saveToStorage('users', updated);
+      setCurrentUserId(newMemberUser.id);
+      return true;
+    }
+
+    // 3. New Google User -> Register as new Member & User
+    const newMemberId = `mem_g_${Date.now()}`;
+    const membershipNumber = `LGH-${Math.floor(1000 + Math.random() * 9000)}`;
+    const now = new Date().toISOString().slice(0, 10);
+    const end = new Date(Date.now() + 24 * 30 * 86400000).toISOString().slice(0, 10);
+
+    const newMember: Member = {
+      id: newMemberId,
+      membershipNumber,
+      fullName: displayName || cleanEmail.split('@')[0],
+      nickname: (displayName || cleanEmail.split('@')[0]).split(' ')[0],
+      email: cleanEmail,
+      phone: '+62 812-Google-User',
+      gender: 'L',
+      birthDate: '1995-01-01',
+      address: 'Mataram, Lombok',
+      city: 'Mataram',
+      province: 'Nusa Tenggara Barat',
+      country: 'Indonesia',
+      idCardNumber: '5201GoogleVerified',
+      tierId: 'tier_member',
+      registrationDate: now,
+      membershipStartDate: now,
+      membershipEndDate: end,
+      referralCode: `${(displayName || 'LGH').slice(0, 4).toUpperCase()}-GOOG`,
+      status: 'ACTIVE',
+      totalVisits: 0,
+      totalTransactions: 0,
+      totalSpending: 0,
+      totalPointsEarned: 100, // Welcome points
+      availablePoints: 100,
+      redeemedPoints: 0,
+      internalNotes: 'Pendaftaran otomatis melalui Verifikasi Akun Google.',
+    };
+
+    const updatedMembers = [newMember, ...members];
+    setMembers(updatedMembers);
+    saveToStorage('members', updatedMembers);
+
+    const newGoogleUser: User = {
+      id: `usr_${newMemberId}`,
+      email: cleanEmail,
+      name: displayName || cleanEmail.split('@')[0],
+      role: 'MEMBER',
+      roleId: 'role_member',
+      memberId: newMemberId,
+      avatar: photoURL,
+      isActive: true,
+      createdAt: new Date().toISOString(),
+    };
+
+    const updatedUsers = [...users, newGoogleUser];
+    setUsers(updatedUsers);
+    saveToStorage('users', updatedUsers);
+    setCurrentUserId(newGoogleUser.id);
+    return true;
+  };
+
   const logout = () => {
-    // Switch to default public or member
-    setCurrentUserId('usr_member_john');
+    setCurrentUserId(null);
   };
 
   const switchDemoRole = (targetIdOrRole: string) => {
@@ -174,8 +275,10 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         currentMember,
         userRole,
         roles,
+        isAuthenticated,
         hasPermission,
         login,
+        loginWithGoogle,
         logout,
         switchDemoRole,
         updateCurrentUser,

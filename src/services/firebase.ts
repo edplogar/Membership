@@ -1,11 +1,38 @@
 import { initializeApp } from 'firebase/app';
-import { getAuth } from 'firebase/auth';
+import { getAuth, GoogleAuthProvider, signInWithPopup } from 'firebase/auth';
 import { getFirestore, doc, getDocFromServer } from 'firebase/firestore';
 import firebaseConfig from '../../firebase-applet-config.json';
 
 const app = initializeApp(firebaseConfig);
 export const db = getFirestore(app, firebaseConfig.firestoreDatabaseId);
 export const auth = getAuth(app);
+export const googleProvider = new GoogleAuthProvider();
+
+// Google Account Authentication Helper
+export async function signInWithGoogleAccount() {
+  try {
+    const provider = new GoogleAuthProvider();
+    provider.setCustomParameters({ prompt: 'select_account' });
+    const result = await signInWithPopup(auth, provider);
+    return {
+      success: true,
+      user: result.user,
+      error: null,
+    };
+  } catch (err: unknown) {
+    const errObj = err as Error & { code?: string };
+    console.warn('Google Sign-In Error:', errObj?.message || err);
+    return {
+      success: false,
+      user: null,
+      error: errObj?.code === 'auth/popup-closed-by-user'
+        ? 'Jendela verifikasi Google ditutup sebelum proses selesai.'
+        : errObj?.code === 'auth/popup-blocked'
+        ? 'Jendela pop-up Google diblokir browser. Harap izinkan pop-up untuk situs ini.'
+        : errObj?.message || 'Gagal melakukan verifikasi akun Google.',
+    };
+  }
+}
 
 // Validation test connection to Firestore as required by Firebase skill
 export async function testFirestoreConnection(): Promise<boolean> {

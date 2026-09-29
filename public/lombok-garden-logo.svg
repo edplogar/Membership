@@ -1,0 +1,49 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 500 500" width="100%" height="100%">
+  <!-- Lombok Garden Hotel Official Logo (Original Shape and #00A651 Color) -->
+  <g fill="#00A651">
+    <!-- 5-Petal Organic Flower Blossom -->
+    <!-- Top-left Petal -->
+    <path d="M 235 195 C 190 140 135 130 95 190 C 70 225 105 270 170 270 C 205 270 230 235 235 195 Z" />
+    <!-- Top Petal -->
+    <path d="M 245 185 C 230 110 270 50 330 65 C 385 80 395 145 350 200 C 315 240 265 220 245 185 Z" />
+    <!-- Top-Right / Right Petal -->
+    <path d="M 265 200 C 330 170 410 175 430 235 C 445 285 390 330 325 315 C 280 305 255 245 265 200 Z" />
+    <!-- Bottom-Right Petal -->
+    <path d="M 255 225 C 300 280 305 345 260 380 C 215 410 170 375 185 320 C 195 285 225 255 255 225 Z" />
+    <!-- Bottom-Left Petal -->
+    <path d="M 230 220 C 180 250 160 320 200 355 C 235 385 280 350 270 290 C 265 255 245 235 230 220 Z" />
+
+    <!-- Organic Petal Overlay for natural silhouette -->
+    <path d="M 250 80 C 290 60 335 70 350 110 C 365 155 330 195 295 205 C 265 215 235 195 230 160 C 225 125 235 90 250 80 Z" />
+    <path d="M 120 180 C 100 210 110 250 150 265 C 190 280 230 260 240 220 C 250 180 215 155 175 155 C 145 155 130 165 120 180 Z" />
+    <path d="M 330 180 C 380 185 415 220 410 260 C 405 300 365 320 320 300 C 285 285 280 240 295 210 C 305 190 315 180 330 180 Z" />
+    <path d="M 270 260 C 310 290 305 340 270 365 C 235 390 195 365 200 325 C 205 290 235 270 270 260 Z" />
+
+    <!-- Center White Flower Rays / Stamen Silhouette -->
+    <!-- Cut-out center stamen using white paths -->
+    <path fill="#FFFFFF" d="M 250 210 L 255 160 L 265 205 L 295 175 L 280 215 L 320 210 L 285 230 L 315 255 L 275 250 L 285 290 L 255 260 L 235 295 L 240 255 L 205 270 L 230 240 L 195 225 L 235 220 L 215 185 L 245 205 Z" />
+
+    <!-- Central Green Core Circle -->
+    <circle cx="255" cy="235" r="18" fill="#00A651" />
+    <!-- Delicate white center accent ring -->
+    <circle cx="255" cy="235" r="6" fill="#FFFFFF" opacity="0.3" />
+  </g>
+
+  <!-- Typography: LOMBOK GARDEN -->
+  <text x="250" y="440" 
+        font-family="system-ui, -apple-system, 'Segoe UI', Roboto, 'Montserrat', sans-serif" 
+        font-size="44" 
+        font-weight="900" 
+        fill="#00A651" 
+        text-anchor="middle" 
+        letter-spacing="2">LOMBOK GARDEN</text>
+
+  <!-- Typography: H O T E L -->
+  <text x="250" y="480" 
+        font-family="system-ui, -apple-system, 'Segoe UI', Roboto, 'Montserrat', sans-serif" 
+        font-size="24" 
+        font-weight="700" 
+        fill="#00A651" 
+        text-anchor="middle" 
+        letter-spacing="14">HOTEL</text>
+</svg>

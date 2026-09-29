@@ -2,6 +2,7 @@ import React, { useState } from 'react';
 import { Member, MembershipTier } from '../../types';
 import { QRCodeView } from '../common/QRCodeView';
 import { formatDateIndo } from '../../services/membershipEngine';
+import { LombokGardenLogo } from '../common/LombokGardenLogo';
 import {
   Sparkles,
   QrCode,
@@ -86,13 +87,10 @@ export const DigitalMembershipCard: React.FC<DigitalMembershipCardProps> = ({
         <div className="absolute inset-0 opacity-10 pointer-events-none bg-[radial-gradient(#fff_1px,transparent_1px)] [background-size:16px_16px]" />
 
         {/* Card Header */}
-        <div className="relative z-10 flex items-start justify-between">
-          <div>
-            <span className="font-serif-luxury text-xs sm:text-sm tracking-widest uppercase font-bold text-stone-300">
-              Lombok Garden Hotel
-            </span>
-            <div className="text-[10px] text-stone-400 tracking-wider uppercase font-medium">
-              Hospitality Club Privileges
+        <div className="relative z-10 flex items-start justify-between gap-3">
+          <div className="flex items-center gap-2.5">
+            <div className="p-1 px-2 rounded-xl bg-white shadow-sm border border-stone-200/60">
+              <LombokGardenLogo variant="horizontal" size="sm" />
             </div>
           </div>
 
