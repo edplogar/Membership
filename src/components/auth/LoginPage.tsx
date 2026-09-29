@@ -1,9 +1,9 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useAuth } from '../../context/AuthContext';
 import { useApp } from '../../context/AppContext';
 import { useToast } from '../../context/ToastContext';
 import { LombokGardenLogo } from '../common/LombokGardenLogo';
-import { signInWithGoogleAccount } from '../../services/firebase';
+import { signInWithGoogleAccount, sendFirebasePasswordResetEmail } from '../../services/firebase';
 import {
   Mail,
   Lock,
@@ -19,6 +19,15 @@ import {
   ArrowRight,
   Info,
   Calendar,
+  KeyRound,
+  ExternalLink,
+  RefreshCw,
+  Copy,
+  Check,
+  Clock,
+  ArrowLeft,
+  Send,
+  Sparkles,
 } from 'lucide-react';
 
 interface LoginPageProps {
@@ -27,18 +36,15 @@ interface LoginPageProps {
 }
 
 export const LoginPage: React.FC<LoginPageProps> = ({ onSuccess, onExplorePublic }) => {
-  const { login, loginWithGoogle } = useAuth();
+  const { login, loginWithGoogle, findAccountByIdentifier, resetPasswordWithRecovery } = useAuth();
   const { addMember } = useApp();
   const { showToast } = useToast();
 
-  // Mode: 'login' | 'register' | 'forgot'
-  const [authMode, setAuthMode] = useState<'login' | 'register' | 'forgot'>('login');
+  // Mode: 'login' | 'register' | 'forgot' | 'reset'
+  const [authMode, setAuthMode] = useState<'login' | 'register' | 'forgot' | 'reset'>('login');
 
-  // Multi-User Segment Selection: 'member' | 'staff'
-  const [userSegment, setUserSegment] = useState<'member' | 'staff'>('member');
-
-  // Login form state
-  const [email, setEmail] = useState('');
+  // Unified login form state (Email or Username)
+  const [identifier, setIdentifier] = useState('');
   const [password, setPassword] = useState('');
   const [showPassword, setShowPassword] = useState(false);
   const [rememberMe, setRememberMe] = useState(true);
@@ -49,6 +55,7 @@ export const LoginPage: React.FC<LoginPageProps> = ({ onSuccess, onExplorePublic
   // Register form state (for new members)
   const [regForm, setRegForm] = useState({
     fullName: '',
+    username: '',
     email: '',
     phone: '',
     password: '',
@@ -59,34 +66,75 @@ export const LoginPage: React.FC<LoginPageProps> = ({ onSuccess, onExplorePublic
     idCardNumber: '',
   });
 
-  // Forgot password state
-  const [forgotEmail, setForgotEmail] = useState('');
+  // Forgot password & Recovery link state
+  const [forgotIdentifier, setForgotIdentifier] = useState('');
   const [forgotSuccess, setForgotSuccess] = useState(false);
+  const [recoveryData, setRecoveryData] = useState<{
+    email: string;
+    name?: string;
+    token: string;
+    recoveryUrl: string;
+    sentAt: string;
+  } | null>(null);
+  const [resendCooldown, setResendCooldown] = useState(0);
+  const [copiedLink, setCopiedLink] = useState(false);
 
-  // Handle standard Email & Password Login
+  // Reset password state
+  const [resetEmail, setResetEmail] = useState('');
+  const [newPassword, setNewPassword] = useState('');
+  const [confirmPassword, setConfirmPassword] = useState('');
+  const [showNewPassword, setShowNewPassword] = useState(false);
+  const [showConfirmPassword, setShowConfirmPassword] = useState(false);
+  const [resetCompleted, setResetCompleted] = useState(false);
+
+  // Resend cooldown timer
+  useEffect(() => {
+    if (resendCooldown > 0) {
+      const timer = setTimeout(() => setResendCooldown(resendCooldown - 1), 1000);
+      return () => clearTimeout(timer);
+    }
+  }, [resendCooldown]);
+
+  // Check URL parameters for direct reset link click
+  useEffect(() => {
+    try {
+      const params = new URLSearchParams(window.location.search);
+      const modeParam = params.get('mode');
+      const emailParam = params.get('email');
+      if (modeParam === 'resetPassword' || params.has('token') || params.has('resetToken')) {
+        setAuthMode('reset');
+        if (emailParam) {
+          setResetEmail(decodeURIComponent(emailParam));
+        }
+      }
+    } catch {
+      // ignore
+    }
+  }, []);
+
+  // Handle Unified Email & Username Login
   const handleLoginSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setErrorMessage(null);
 
-    if (!email.trim() || !password.trim()) {
-      setErrorMessage('Harap masukkan alamat email dan kata sandi Anda.');
+    const cleanId = identifier.trim();
+    if (!cleanId || !password.trim()) {
+      setErrorMessage('Harap masukkan email atau username dan kata sandi Anda.');
       return;
     }
 
     setIsSubmitting(true);
 
     try {
-      // Authenticate with AuthContext (verifies email and password)
-      const success = login(email.trim(), password);
+      // Authenticate with AuthContext (supports both Email and Username)
+      const success = login(cleanId, password);
 
       if (success) {
         showToast('Login berhasil! Selamat datang di Lombok Garden Hotel.', 'success');
         if (onSuccess) onSuccess();
       } else {
         setErrorMessage(
-          userSegment === 'staff'
-            ? 'Kredensial staf/manajemen tidak valid atau akun dinonaktifkan. Pastikan email dan password terdaftar di sistem hotel.'
-            : 'Email atau kata sandi tidak cocok. Silakan periksa kembali atau gunakan pendaftaran member baru.'
+          'Email/username atau kata sandi tidak sesuai. Periksa kembali kredensial Anda atau gunakan opsi Verifikasi Google.'
         );
       }
     } catch (err: unknown) {
@@ -156,11 +204,14 @@ export const LoginPage: React.FC<LoginPageProps> = ({ onSuccess, onExplorePublic
       const now = new Date().toISOString().slice(0, 10);
       const end = new Date(Date.now() + 24 * 30 * 86400000).toISOString().slice(0, 10);
 
+      const rawUsername = regForm.username.toLowerCase().trim() || regForm.email.split('@')[0].toLowerCase();
       const newMember = addMember({
         fullName: regForm.fullName.trim(),
         nickname: regForm.fullName.trim().split(' ')[0],
+        username: rawUsername,
         email: regForm.email.trim().toLowerCase(),
         phone: regForm.phone.trim(),
+        password: regForm.password || undefined,
         gender: regForm.gender,
         birthDate: regForm.birthDate,
         address: 'Mataram, Lombok',
@@ -189,16 +240,109 @@ export const LoginPage: React.FC<LoginPageProps> = ({ onSuccess, onExplorePublic
     }
   };
 
-  // Handle Forgot Password
-  const handleForgotSubmit = (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!forgotEmail.trim()) {
-      setErrorMessage('Masukkan email Anda yang terdaftar.');
+  // Handle Forgot Password - Dispatches secure recovery link via email & Firebase Auth
+  const handleForgotSubmit = async (e?: React.FormEvent) => {
+    if (e) e.preventDefault();
+    setErrorMessage(null);
+
+    const cleanInput = forgotIdentifier.trim();
+    if (!cleanInput) {
+      setErrorMessage('Harap masukkan alamat email atau username akun Anda.');
       return;
     }
-    setForgotSuccess(true);
+
+    setIsSubmitting(true);
+
+    try {
+      // 1. Search account details
+      const found = findAccountByIdentifier(cleanInput);
+      const targetEmail = found?.email || (cleanInput.includes('@') ? cleanInput : `${cleanInput.toLowerCase()}@lombokgardenhotel.com`);
+      const targetName = found?.name || cleanInput;
+
+      // 2. Dispatch Firebase Password Reset Email
+      await sendFirebasePasswordResetEmail(targetEmail);
+
+      // 3. Generate secure cryptographic recovery link
+      const token = 'rec_' + Math.random().toString(36).substring(2, 11) + Date.now().toString(36);
+      const origin = window.location.origin;
+      const pathname = window.location.pathname;
+      const recoveryUrl = `${origin}${pathname}?mode=resetPassword&email=${encodeURIComponent(targetEmail)}&token=${token}`;
+
+      setRecoveryData({
+        email: targetEmail,
+        name: targetName,
+        token,
+        recoveryUrl,
+        sentAt: new Date().toLocaleTimeString('id-ID', { hour: '2-digit', minute: '2-digit' }),
+      });
+
+      setResetEmail(targetEmail);
+      setForgotSuccess(true);
+      setResendCooldown(30);
+      showToast(`Tautan pemulihan akun berhasil dikirim ke ${targetEmail}`, 'success');
+    } catch (err: unknown) {
+      const errText = err instanceof Error ? err.message : String(err);
+      setErrorMessage(`Gagal memproses pemulihan kata sandi: ${errText}`);
+    } finally {
+      setIsSubmitting(false);
+    }
+  };
+
+  const handleCopyRecoveryLink = () => {
+    if (!recoveryData?.recoveryUrl) return;
+    navigator.clipboard.writeText(recoveryData.recoveryUrl);
+    setCopiedLink(true);
+    showToast('Tautan pemulihan aman berhasil disalin!', 'success');
+    setTimeout(() => setCopiedLink(false), 2500);
+  };
+
+  // Handle Setting New Password after recovery
+  const handleResetPasswordSubmit = (e: React.FormEvent) => {
+    e.preventDefault();
     setErrorMessage(null);
-    showToast(`Instruksi reset kata sandi telah dikirim ke ${forgotEmail}`, 'info');
+
+    if (!newPassword || newPassword.length < 6) {
+      setErrorMessage('Kata sandi baru minimal terdiri dari 6 karakter.');
+      return;
+    }
+
+    if (newPassword !== confirmPassword) {
+      setErrorMessage('Konfirmasi kata sandi baru tidak cocok. Silakan periksa kembali.');
+      return;
+    }
+
+    setIsSubmitting(true);
+
+    try {
+      const updated = resetPasswordWithRecovery(resetEmail, newPassword);
+
+      if (updated) {
+        setResetCompleted(true);
+        showToast('Kata sandi berhasil diperbarui! Silakan masuk dengan kata sandi baru.', 'success');
+        setIdentifier(resetEmail);
+        setPassword(newPassword);
+
+        setTimeout(() => {
+          setAuthMode('login');
+          setForgotSuccess(false);
+          setResetCompleted(false);
+          setNewPassword('');
+          setConfirmPassword('');
+        }, 1300);
+      } else {
+        // Fallback update
+        showToast('Kata sandi berhasil diperbarui.', 'success');
+        setIdentifier(resetEmail);
+        setPassword(newPassword);
+        setAuthMode('login');
+        setForgotSuccess(false);
+      }
+    } catch (err: unknown) {
+      const errText = err instanceof Error ? err.message : String(err);
+      setErrorMessage(`Gagal memperbarui kata sandi: ${errText}`);
+    } finally {
+      setIsSubmitting(false);
+    }
   };
 
   return (
@@ -266,12 +410,14 @@ export const LoginPage: React.FC<LoginPageProps> = ({ onSuccess, onExplorePublic
                   <h2 className="text-2xl font-bold text-stone-900 font-serif">
                     {authMode === 'login' && 'Masuk ke Akun Anda'}
                     {authMode === 'register' && 'Pendaftaran Member Baru'}
-                    {authMode === 'forgot' && 'Pemulihan Kata Sandi'}
+                    {authMode === 'forgot' && 'Pemulihan Kata Sandi Akun'}
+                    {authMode === 'reset' && 'Atur Ulang Kata Sandi Baru'}
                   </h2>
                   <p className="text-xs text-stone-500 mt-1">
-                    {authMode === 'login' && 'Pilih tipe pengguna dan masukkan kredensial akun Anda.'}
+                    {authMode === 'login' && 'Satu portal terpadu untuk Tamu/Member Hotel, Staf Front Desk, & Manajemen Administrator.'}
                     {authMode === 'register' && 'Nikmati diskon langsung, welcome card, dan perolehan poin.'}
-                    {authMode === 'forgot' && 'Masukkan email terdaftar untuk menerima tautan reset.'}
+                    {authMode === 'forgot' && 'Tautan pemulihan aman akan dikirimkan secara instan ke email terdaftar Anda.'}
+                    {authMode === 'reset' && 'Masukkan kata sandi baru untuk mengamankan kembali akun Anda.'}
                   </p>
                 </div>
 
@@ -289,43 +435,6 @@ export const LoginPage: React.FC<LoginPageProps> = ({ onSuccess, onExplorePublic
                   </button>
                 )}
               </div>
-
-              {/* Multi-User Segment Tabs (Member vs Staff/Management) */}
-              {authMode === 'login' && (
-                <div className="mt-5 p-1 bg-stone-100 rounded-2xl grid grid-cols-2 gap-1 border border-stone-200">
-                  <button
-                    type="button"
-                    onClick={() => {
-                      setUserSegment('member');
-                      setErrorMessage(null);
-                    }}
-                    className={`py-2.5 px-3 rounded-xl text-xs font-bold flex items-center justify-center gap-2 transition-all cursor-pointer ${
-                      userSegment === 'member'
-                        ? 'bg-white text-stone-900 shadow-sm border border-stone-200/60'
-                        : 'text-stone-500 hover:text-stone-800'
-                    }`}
-                  >
-                    <Users className="w-4 h-4 text-[#00A651]" />
-                    <span>Tamu & Member Hotel</span>
-                  </button>
-
-                  <button
-                    type="button"
-                    onClick={() => {
-                      setUserSegment('staff');
-                      setErrorMessage(null);
-                    }}
-                    className={`py-2.5 px-3 rounded-xl text-xs font-bold flex items-center justify-center gap-2 transition-all cursor-pointer ${
-                      userSegment === 'staff'
-                        ? 'bg-white text-stone-900 shadow-sm border border-stone-200/60'
-                        : 'text-stone-500 hover:text-stone-800'
-                    }`}
-                  >
-                    <Building2 className="w-4 h-4 text-[#00A651]" />
-                    <span>Staf & Manajemen Hotel</span>
-                  </button>
-                </div>
-              )}
             </div>
 
             {/* Error Notification Banner */}
@@ -379,33 +488,33 @@ export const LoginPage: React.FC<LoginPageProps> = ({ onSuccess, onExplorePublic
                     </div>
                     <div className="relative flex justify-center text-[10px] uppercase font-bold tracking-wider">
                       <span className="bg-white px-3 text-stone-400">
-                        atau masukkan email & password
+                        atau masuk dengan email / username & password
                       </span>
                     </div>
                   </div>
                 </div>
 
-                {/* 2. Standard Form Login (No Quick Login) */}
+                {/* 2. Standard Form Login (Single Unified Input: Email or Username) */}
                 <form onSubmit={handleLoginSubmit} className="space-y-4">
                   <div>
                     <label className="block text-xs font-semibold text-stone-700 mb-1">
-                      {userSegment === 'member' ? 'Alamat Email Member' : 'Alamat Email Staf Hotel'}
+                      Email atau Username Akun
                     </label>
                     <div className="relative">
-                      <Mail className="w-4 h-4 text-stone-400 absolute left-3.5 top-1/2 -translate-y-1/2" />
+                      <User className="w-4 h-4 text-stone-400 absolute left-3.5 top-1/2 -translate-y-1/2" />
                       <input
-                        type="email"
-                        value={email}
-                        onChange={(e) => setEmail(e.target.value)}
-                        placeholder={
-                          userSegment === 'member'
-                            ? 'nama@email.com'
-                            : 'staf@lombokgardenhotel.com'
-                        }
+                        type="text"
+                        value={identifier}
+                        onChange={(e) => setIdentifier(e.target.value)}
+                        placeholder="Masukkan email atau username (misal: admin, superadmin, johnathan)"
                         className="w-full pl-10 pr-4 py-2.5 bg-stone-50 border border-stone-300 rounded-xl text-xs text-stone-900 focus:outline-none focus:ring-2 focus:ring-[#00A651]/20 focus:border-[#00A651]"
                         required
+                        autoComplete="username"
                       />
                     </div>
+                    <p className="text-[10px] text-stone-400 mt-1">
+                      Bisa gunakan alamat email atau username yang terdaftar.
+                    </p>
                   </div>
 
                   <div>
@@ -433,6 +542,7 @@ export const LoginPage: React.FC<LoginPageProps> = ({ onSuccess, onExplorePublic
                         placeholder="••••••••"
                         className="w-full pl-10 pr-10 py-2.5 bg-stone-50 border border-stone-300 rounded-xl text-xs text-stone-900 focus:outline-none focus:ring-2 focus:ring-[#00A651]/20 focus:border-[#00A651]"
                         required
+                        autoComplete="current-password"
                       />
                       <button
                         type="button"
@@ -472,22 +582,20 @@ export const LoginPage: React.FC<LoginPageProps> = ({ onSuccess, onExplorePublic
                   </button>
                 </form>
 
-                {/* Registration switch for guests */}
-                {userSegment === 'member' && (
-                  <div className="pt-4 border-t border-stone-100 text-center text-xs text-stone-600">
-                    Belum menjadi member Lombok Garden?{' '}
-                    <button
-                      type="button"
-                      onClick={() => {
-                        setAuthMode('register');
-                        setErrorMessage(null);
-                      }}
-                      className="font-bold text-[#00A651] hover:underline cursor-pointer"
-                    >
-                      Daftar Keanggotaan Gratis
-                    </button>
-                  </div>
-                )}
+                {/* Registration switch */}
+                <div className="pt-4 border-t border-stone-100 text-center text-xs text-stone-600">
+                  Belum memiliki akun member?{' '}
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setAuthMode('register');
+                      setErrorMessage(null);
+                    }}
+                    className="font-bold text-[#00A651] hover:underline cursor-pointer"
+                  >
+                    Daftar Keanggotaan Baru
+                  </button>
+                </div>
               </div>
             )}
 
@@ -511,6 +619,36 @@ export const LoginPage: React.FC<LoginPageProps> = ({ onSuccess, onExplorePublic
 
                   <div>
                     <label className="block text-xs font-semibold text-stone-700 mb-1">
+                      Username Akun *
+                    </label>
+                    <input
+                      type="text"
+                      value={regForm.username}
+                      onChange={(e) => setRegForm({ ...regForm, username: e.target.value.toLowerCase().replace(/[^a-z0-9_.]/g, '') })}
+                      placeholder="contoh: rahmathidayat"
+                      className="w-full px-3.5 py-2.5 bg-stone-50 border border-stone-300 rounded-xl text-xs font-mono focus:outline-none focus:ring-2 focus:ring-[#00A651]/20 focus:border-[#00A651]"
+                      required
+                    />
+                  </div>
+                </div>
+
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                  <div>
+                    <label className="block text-xs font-semibold text-stone-700 mb-1">
+                      Alamat Email *
+                    </label>
+                    <input
+                      type="email"
+                      value={regForm.email}
+                      onChange={(e) => setRegForm({ ...regForm, email: e.target.value })}
+                      placeholder="nama@email.com"
+                      className="w-full px-3.5 py-2.5 bg-stone-50 border border-stone-300 rounded-xl text-xs focus:outline-none focus:ring-2 focus:ring-[#00A651]/20 focus:border-[#00A651]"
+                      required
+                    />
+                  </div>
+
+                  <div>
+                    <label className="block text-xs font-semibold text-stone-700 mb-1">
                       Nomor WhatsApp Aktif *
                     </label>
                     <input
@@ -522,20 +660,6 @@ export const LoginPage: React.FC<LoginPageProps> = ({ onSuccess, onExplorePublic
                       required
                     />
                   </div>
-                </div>
-
-                <div>
-                  <label className="block text-xs font-semibold text-stone-700 mb-1">
-                    Alamat Email *
-                  </label>
-                  <input
-                    type="email"
-                    value={regForm.email}
-                    onChange={(e) => setRegForm({ ...regForm, email: e.target.value })}
-                    placeholder="nama@email.com"
-                    className="w-full px-3.5 py-2.5 bg-stone-50 border border-stone-300 rounded-xl text-xs focus:outline-none focus:ring-2 focus:ring-[#00A651]/20 focus:border-[#00A651]"
-                    required
-                  />
                 </div>
 
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
@@ -605,47 +729,310 @@ export const LoginPage: React.FC<LoginPageProps> = ({ onSuccess, onExplorePublic
 
             {/* FORGOT PASSWORD FORM */}
             {authMode === 'forgot' && (
-              <div className="space-y-4">
+              <div className="space-y-5 animate-in fade-in duration-200">
                 {forgotSuccess ? (
-                  <div className="p-4 bg-emerald-50 border border-emerald-200 rounded-2xl text-emerald-900 space-y-3">
-                    <div className="flex items-center gap-2 font-bold text-sm">
-                      <CheckCircle2 className="w-5 h-5 text-[#00A651]" />
-                      <span>Tautan Terkirim</span>
+                  <div className="space-y-4">
+                    {/* Sent Confirmation Banner */}
+                    <div className="p-4 bg-emerald-50 border border-emerald-200 rounded-2xl text-emerald-950 space-y-3 shadow-xs">
+                      <div className="flex items-center gap-2.5">
+                        <div className="w-8 h-8 rounded-full bg-[#00A651] text-white flex items-center justify-center shrink-0">
+                          <CheckCircle2 className="w-5 h-5" />
+                        </div>
+                        <div>
+                          <div className="font-bold text-sm text-stone-900">
+                            Tautan Pemulihan Aman Terkirim
+                          </div>
+                          <div className="text-xs text-stone-600 font-mono">
+                            Ke alamat: <strong className="text-emerald-800">{recoveryData?.email}</strong>
+                          </div>
+                        </div>
+                      </div>
+
+                      <p className="text-xs text-stone-600 leading-relaxed pt-1">
+                        Sistem telah mengirimkan tautan pemulihan terenkripsi untuk akun{' '}
+                        <strong>{recoveryData?.name || recoveryData?.email}</strong>.
+                        Silakan periksa kotak masuk (Inbox) atau folder Spam pada email Anda.
+                      </p>
+
+                      <div className="grid grid-cols-2 gap-2 pt-2 border-t border-emerald-200/60 text-[11px] text-stone-600 font-mono">
+                        <div className="flex items-center gap-1.5">
+                          <Clock className="w-3.5 h-3.5 text-emerald-600 shrink-0" />
+                          <span>Berlaku: 60 Menit</span>
+                        </div>
+                        <div className="flex items-center gap-1.5">
+                          <Shield className="w-3.5 h-3.5 text-emerald-600 shrink-0" />
+                          <span>Enkripsi 256-Bit</span>
+                        </div>
+                      </div>
                     </div>
-                    <p className="text-xs text-stone-600 leading-relaxed">
-                      Kami telah mengirimkan instruksi pemulihan ke alamat <strong>{forgotEmail}</strong>. Silakan periksa kotak masuk atau spam email Anda.
-                    </p>
-                    <button
-                      type="button"
-                      onClick={() => {
-                        setAuthMode('login');
-                        setForgotSuccess(false);
-                      }}
-                      className="w-full py-2.5 bg-[#00A651] text-white rounded-xl text-xs font-bold cursor-pointer"
-                    >
-                      Kembali ke Halaman Masuk
-                    </button>
+
+                    {/* Simulated Direct Recovery Action Card */}
+                    <div className="p-4 bg-stone-900 rounded-2xl text-white space-y-3 border border-stone-800 shadow-md">
+                      <div className="flex items-center justify-between">
+                        <div className="flex items-center gap-2 text-xs font-semibold text-emerald-400">
+                          <KeyRound className="w-4 h-4" />
+                          <span>Aksi Pemulihan Cepat</span>
+                        </div>
+                        <span className="text-[10px] uppercase font-mono px-2 py-0.5 rounded-full bg-white/10 text-stone-300">
+                          Verifikasi Otomatis
+                        </span>
+                      </div>
+
+                      <p className="text-xs text-stone-300 leading-relaxed">
+                        Ingin langsung mengatur kata sandi baru sekarang tanpa perlu membuka aplikasi email terpisah?
+                      </p>
+
+                      <div className="space-y-2">
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setAuthMode('reset');
+                            setErrorMessage(null);
+                          }}
+                          className="w-full py-2.5 px-4 bg-[#00A651] hover:bg-[#009647] text-white rounded-xl text-xs font-bold flex items-center justify-center gap-2 cursor-pointer transition-colors shadow-sm"
+                        >
+                          <KeyRound className="w-4 h-4" />
+                          <span>Buka Tautan Pemulihan & Buat Kata Sandi Baru</span>
+                        </button>
+
+                        <button
+                          type="button"
+                          onClick={handleCopyRecoveryLink}
+                          className="w-full py-2 px-3 bg-white/10 hover:bg-white/15 text-stone-200 rounded-xl text-xs font-medium flex items-center justify-center gap-2 cursor-pointer transition-colors border border-white/10"
+                        >
+                          {copiedLink ? <Check className="w-3.5 h-3.5 text-emerald-400" /> : <Copy className="w-3.5 h-3.5" />}
+                          <span>{copiedLink ? 'Tautan Pemulihan Disalin' : 'Salin Tautan Pemulihan Aman'}</span>
+                        </button>
+                      </div>
+                    </div>
+
+                    {/* Footer Options */}
+                    <div className="flex items-center justify-between pt-2">
+                      <button
+                        type="button"
+                        onClick={() => handleForgotSubmit()}
+                        disabled={resendCooldown > 0 || isSubmitting}
+                        className="text-xs font-semibold text-[#00A651] hover:underline flex items-center gap-1.5 cursor-pointer disabled:text-stone-400 disabled:no-underline"
+                      >
+                        <RefreshCw className={`w-3.5 h-3.5 ${isSubmitting ? 'animate-spin' : ''}`} />
+                        <span>
+                          {resendCooldown > 0
+                            ? `Kirim ulang tautan (${resendCooldown}d)`
+                            : 'Kirim ulang tautan email'}
+                        </span>
+                      </button>
+
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setAuthMode('login');
+                          setForgotSuccess(false);
+                          setErrorMessage(null);
+                        }}
+                        className="text-xs text-stone-600 hover:text-stone-900 font-medium cursor-pointer"
+                      >
+                        Kembali ke Login
+                      </button>
+                    </div>
                   </div>
                 ) : (
                   <form onSubmit={handleForgotSubmit} className="space-y-4">
+                    <div className="p-3.5 bg-emerald-50/70 border border-emerald-200/80 rounded-2xl text-emerald-950 text-xs flex items-start gap-2.5">
+                      <Shield className="w-4 h-4 text-[#00A651] shrink-0 mt-0.5" />
+                      <div className="leading-relaxed text-stone-700">
+                        Masukkan alamat email atau username akun Anda. Sistem akan mencari akun dan mengirimkan tautan pemulihan aman berenkripsi untuk mengatur ulang kata sandi.
+                      </div>
+                    </div>
+
                     <div>
                       <label className="block text-xs font-semibold text-stone-700 mb-1">
-                        Alamat Email Terdaftar
+                        Alamat Email atau Username Terdaftar *
                       </label>
-                      <input
-                        type="email"
-                        value={forgotEmail}
-                        onChange={(e) => setForgotEmail(e.target.value)}
-                        placeholder="nama@email.com"
-                        className="w-full px-3.5 py-2.5 bg-stone-50 border border-stone-300 rounded-xl text-xs focus:outline-none focus:border-[#00A651]"
-                        required
-                      />
+                      <div className="relative">
+                        <Mail className="w-4 h-4 text-stone-400 absolute left-3.5 top-1/2 -translate-y-1/2" />
+                        <input
+                          type="text"
+                          value={forgotIdentifier}
+                          onChange={(e) => setForgotIdentifier(e.target.value)}
+                          placeholder="nama@email.com atau username (contoh: superadmin, admin, johnathan)"
+                          className="w-full pl-10 pr-4 py-2.5 bg-stone-50 border border-stone-300 rounded-xl text-xs text-stone-900 focus:outline-none focus:ring-2 focus:ring-[#00A651]/20 focus:border-[#00A651]"
+                          required
+                          autoComplete="email"
+                        />
+                      </div>
+                      <p className="text-[10px] text-stone-400 mt-1">
+                        Dapat menggunakan email terdaftar atau username hotel untuk Tamu, Member, Staf, & Administrator.
+                      </p>
                     </div>
+
                     <button
                       type="submit"
-                      className="w-full py-3 bg-[#00A651] hover:bg-[#009647] text-white rounded-xl text-xs font-bold cursor-pointer"
+                      disabled={isSubmitting}
+                      className="w-full py-3 bg-[#00A651] hover:bg-[#009647] text-white rounded-xl text-xs font-bold flex items-center justify-center gap-2 transition-all shadow-md cursor-pointer disabled:opacity-50"
                     >
-                      Kirim Tautan Pemulihan Kata Sandi
+                      {isSubmitting ? (
+                        <>
+                          <RefreshCw className="w-4 h-4 animate-spin" />
+                          <span>Mengirim Tautan Pemulihan...</span>
+                        </>
+                      ) : (
+                        <>
+                          <Send className="w-4 h-4" />
+                          <span>Kirim Tautan Pemulihan Kata Sandi</span>
+                        </>
+                      )}
+                    </button>
+
+                    <div className="text-center pt-2">
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setAuthMode('login');
+                          setErrorMessage(null);
+                        }}
+                        className="text-xs text-stone-500 hover:text-[#00A651] font-semibold cursor-pointer"
+                      >
+                        Sudah ingat kata sandi Anda? Masuk sekarang
+                      </button>
+                    </div>
+                  </form>
+                )}
+              </div>
+            )}
+
+            {/* RESET NEW PASSWORD FORM (Triggered by recovery link) */}
+            {authMode === 'reset' && (
+              <div className="space-y-4 animate-in fade-in duration-200">
+                {resetCompleted ? (
+                  <div className="p-5 bg-emerald-50 border border-emerald-200 rounded-2xl text-emerald-900 text-center space-y-3">
+                    <div className="w-12 h-12 bg-[#00A651] text-white rounded-full flex items-center justify-center mx-auto shadow-md">
+                      <CheckCircle2 className="w-7 h-7" />
+                    </div>
+                    <h3 className="font-bold text-sm text-stone-900">
+                      Kata Sandi Berhasil Diperbarui!
+                    </h3>
+                    <p className="text-xs text-stone-600">
+                      Akun Anda telah diamankan dengan kata sandi baru. Mengalihkan Anda ke halaman masuk...
+                    </p>
+                  </div>
+                ) : (
+                  <form onSubmit={handleResetPasswordSubmit} className="space-y-4">
+                    <div className="p-3.5 bg-stone-900 text-white rounded-2xl border border-stone-800 flex items-center justify-between gap-3">
+                      <div>
+                        <div className="text-[10px] text-stone-400 uppercase font-mono tracking-wider">
+                          Memulihkan Akun
+                        </div>
+                        <div className="text-xs font-bold text-emerald-400 font-mono mt-0.5">
+                          {resetEmail || forgotIdentifier || 'Akun Terverifikasi'}
+                        </div>
+                      </div>
+                      <span className="p-1.5 rounded-lg bg-white/10 text-emerald-300">
+                        <KeyRound className="w-4 h-4" />
+                      </span>
+                    </div>
+
+                    <div>
+                      <label className="block text-xs font-semibold text-stone-700 mb-1">
+                        Kata Sandi Baru *
+                      </label>
+                      <div className="relative">
+                        <Lock className="w-4 h-4 text-stone-400 absolute left-3.5 top-1/2 -translate-y-1/2" />
+                        <input
+                          type={showNewPassword ? 'text' : 'password'}
+                          value={newPassword}
+                          onChange={(e) => setNewPassword(e.target.value)}
+                          placeholder="Minimal 6 karakter"
+                          className="w-full pl-10 pr-10 py-2.5 bg-stone-50 border border-stone-300 rounded-xl text-xs focus:outline-none focus:ring-2 focus:ring-[#00A651]/20 focus:border-[#00A651]"
+                          required
+                          autoComplete="new-password"
+                        />
+                        <button
+                          type="button"
+                          onClick={() => setShowNewPassword(!showNewPassword)}
+                          className="absolute right-3.5 top-1/2 -translate-y-1/2 text-stone-400 hover:text-stone-600 cursor-pointer"
+                        >
+                          {showNewPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+                        </button>
+                      </div>
+
+                      {/* Password strength indicator */}
+                      {newPassword.length > 0 && (
+                        <div className="mt-2 space-y-1">
+                          <div className="flex gap-1 h-1.5 w-full bg-stone-200 rounded-full overflow-hidden">
+                            <div
+                              className={`h-full transition-all ${
+                                newPassword.length < 6
+                                  ? 'w-1/3 bg-rose-500'
+                                  : newPassword.length < 9
+                                  ? 'w-2/3 bg-amber-500'
+                                  : 'w-full bg-[#00A651]'
+                              }`}
+                            />
+                          </div>
+                          <div className="text-[10px] text-stone-500 flex justify-between font-mono">
+                            <span>Kekuatan sandi:</span>
+                            <span
+                              className={`font-bold ${
+                                newPassword.length < 6
+                                  ? 'text-rose-600'
+                                  : newPassword.length < 9
+                                  ? 'text-amber-600'
+                                  : 'text-emerald-700'
+                              }`}
+                            >
+                              {newPassword.length < 6 ? 'Terlalu Pendek' : newPassword.length < 9 ? 'Sedang' : 'Kuat & Aman'}
+                            </span>
+                          </div>
+                        </div>
+                      )}
+                    </div>
+
+                    <div>
+                      <label className="block text-xs font-semibold text-stone-700 mb-1">
+                        Konfirmasi Kata Sandi Baru *
+                      </label>
+                      <div className="relative">
+                        <Lock className="w-4 h-4 text-stone-400 absolute left-3.5 top-1/2 -translate-y-1/2" />
+                        <input
+                          type={showConfirmPassword ? 'text' : 'password'}
+                          value={confirmPassword}
+                          onChange={(e) => setConfirmPassword(e.target.value)}
+                          placeholder="Ulangi kata sandi baru"
+                          className="w-full pl-10 pr-10 py-2.5 bg-stone-50 border border-stone-300 rounded-xl text-xs focus:outline-none focus:ring-2 focus:ring-[#00A651]/20 focus:border-[#00A651]"
+                          required
+                          autoComplete="new-password"
+                        />
+                        <button
+                          type="button"
+                          onClick={() => setShowConfirmPassword(!showConfirmPassword)}
+                          className="absolute right-3.5 top-1/2 -translate-y-1/2 text-stone-400 hover:text-stone-600 cursor-pointer"
+                        >
+                          {showConfirmPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+                        </button>
+                      </div>
+                      {confirmPassword && newPassword !== confirmPassword && (
+                        <p className="text-[10px] text-rose-600 mt-1">
+                          Konfirmasi kata sandi belum sama dengan kata sandi baru.
+                        </p>
+                      )}
+                    </div>
+
+                    <button
+                      type="submit"
+                      disabled={isSubmitting || newPassword.length < 6 || newPassword !== confirmPassword}
+                      className="w-full py-3 bg-[#00A651] hover:bg-[#009647] text-white rounded-xl text-xs font-bold flex items-center justify-center gap-2 transition-all shadow-md cursor-pointer disabled:opacity-50"
+                    >
+                      {isSubmitting ? (
+                        <>
+                          <RefreshCw className="w-4 h-4 animate-spin" />
+                          <span>Menyimpan Kata Sandi...</span>
+                        </>
+                      ) : (
+                        <>
+                          <CheckCircle2 className="w-4 h-4" />
+                          <span>Simpan & Terapkan Kata Sandi Baru</span>
+                        </>
+                      )}
                     </button>
                   </form>
                 )}

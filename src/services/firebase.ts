@@ -1,5 +1,5 @@
 import { initializeApp } from 'firebase/app';
-import { getAuth, GoogleAuthProvider, signInWithPopup } from 'firebase/auth';
+import { getAuth, GoogleAuthProvider, signInWithPopup, sendPasswordResetEmail } from 'firebase/auth';
 import { getFirestore, doc, getDocFromServer } from 'firebase/firestore';
 import firebaseConfig from '../../firebase-applet-config.json';
 
@@ -7,6 +7,26 @@ const app = initializeApp(firebaseConfig);
 export const db = getFirestore(app, firebaseConfig.firestoreDatabaseId);
 export const auth = getAuth(app);
 export const googleProvider = new GoogleAuthProvider();
+
+// Firebase Auth Password Reset Email Helper
+export async function sendFirebasePasswordResetEmail(email: string) {
+  try {
+    await sendPasswordResetEmail(auth, email);
+    return { success: true, error: null };
+  } catch (err: unknown) {
+    const errObj = err as Error & { code?: string };
+    console.warn('Firebase Password Reset Notice:', errObj?.message || err);
+    return {
+      success: false,
+      error: errObj?.code === 'auth/user-not-found'
+        ? 'Alamat email tidak terdaftar di sistem autentikasi Firebase.'
+        : errObj?.code === 'auth/invalid-email'
+        ? 'Format alamat email tidak valid.'
+        : errObj?.message || 'Gagal mengirim email reset kata sandi.',
+      code: errObj?.code,
+    };
+  }
+}
 
 // Google Account Authentication Helper
 export async function signInWithGoogleAccount() {

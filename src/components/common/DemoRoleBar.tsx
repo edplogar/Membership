@@ -33,7 +33,12 @@ export const DemoRoleBar: React.FC<DemoRoleBarProps> = ({ onOpenScanner }) => {
         </span>
         <span className="text-stone-600 hidden sm:inline">|</span>
         <span className="text-stone-300 flex items-center gap-2">
-          <span>Pengguna: <strong className="text-white">{currentUser?.name}</strong></span>
+          <span>
+            Pengguna: <strong className="text-white">{currentUser?.name}</strong>{' '}
+            <span className="text-emerald-400 font-mono text-[11px]">
+              (@{currentUser?.username || (currentUser?.role === 'SUPER_ADMIN' ? 'superadmin' : currentUser?.role === 'ADMIN' ? 'admin' : currentUser?.email.split('@')[0])})
+            </span>
+          </span>
           <span className={`text-[10px] px-2 py-0.5 rounded-full font-bold uppercase ${
             userRole === 'SUPER_ADMIN'
               ? 'bg-amber-500/20 text-amber-300 border border-amber-500/30'

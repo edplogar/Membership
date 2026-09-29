@@ -15,12 +15,29 @@ interface AuthContextValue {
   roles: Role[];
   isAuthenticated: boolean;
   hasPermission: (permission: PermissionCode) => boolean;
-  login: (email: string, password?: string) => boolean;
+  login: (identifier: string, password?: string) => boolean;
   loginWithGoogle: (googleEmail: string, displayName?: string, photoURL?: string) => boolean;
   logout: () => void;
   switchDemoRole: (userIdOrRole: string) => void;
   updateCurrentUser: (updates: Partial<User>) => void;
+  updateUserProfile: (updates: {
+    name: string;
+    username?: string;
+    email: string;
+    phone?: string;
+    avatar?: string;
+    department?: string;
+    jobTitle?: string;
+    password?: string;
+    address?: string;
+    city?: string;
+    birthDate?: string;
+    gender?: 'L' | 'P' | 'OTHER';
+  }) => void;
+  updateAdministrator: (userId: string, updates: Partial<User>) => void;
   refreshMemberData: (member: Member) => void;
+  findAccountByIdentifier: (identifier: string) => { email: string; name: string; username?: string; avatar?: string } | null;
+  resetPasswordWithRecovery: (emailOrUsername: string, newPassword: string) => boolean;
 }
 
 const AuthContext = createContext<AuthContextValue | undefined>(undefined);
@@ -68,35 +85,68 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     return roleObj.permissions.includes(permission);
   };
 
-  const login = (email: string, _password?: string): boolean => {
-    const cleanEmail = email.toLowerCase().trim();
+  const login = (identifier: string, password?: string): boolean => {
+    const cleanId = identifier.toLowerCase().trim();
+
+    // 1. Search in users table by email OR username
     const foundUser = users.find(
-      (u) => u.email.toLowerCase().trim() === cleanEmail
+      (u) =>
+        u.email.toLowerCase().trim() === cleanId ||
+        (u.username && u.username.toLowerCase().trim() === cleanId) ||
+        (cleanId === 'superadmin' && u.role === 'SUPER_ADMIN') ||
+        (cleanId === 'admin' && u.role === 'ADMIN')
     );
 
     if (foundUser) {
       if (!foundUser.isActive) return false;
+      // If user has a set password and a password was entered, verify it
+      if (password && foundUser.password && foundUser.password.trim() !== password.trim()) {
+        return false;
+      }
+      const updatedUser: User = {
+        ...foundUser,
+        username: foundUser.username || (foundUser.role === 'SUPER_ADMIN' ? 'superadmin' : foundUser.role === 'ADMIN' ? 'admin' : foundUser.email.split('@')[0]),
+        lastLogin: new Date().toISOString(),
+      };
+      const updatedList = users.map((u) => (u.id === updatedUser.id ? updatedUser : u));
+      setUsers(updatedList);
+      saveToStorage('users', updatedList);
       setCurrentUserId(foundUser.id);
       return true;
     }
 
-    // Check if it's a member email not yet in users table
+    // 2. Check in members table by email OR username
     const foundMember = members.find(
-      (m) => m.email.toLowerCase().trim() === cleanEmail
+      (m) =>
+        m.email.toLowerCase().trim() === cleanId ||
+        (m.username && m.username.toLowerCase().trim() === cleanId) ||
+        m.nickname.toLowerCase().trim() === cleanId
     );
+
     if (foundMember) {
+      if (foundMember.status === 'SUSPENDED' || foundMember.status === 'INACTIVE') {
+        return false;
+      }
+      if (password && foundMember.password && foundMember.password.trim() !== password.trim()) {
+        return false;
+      }
+
+      const generatedUsername = foundMember.username || foundMember.email.split('@')[0];
       const newMemberUser: User = {
         id: `usr_${foundMember.id}`,
         email: foundMember.email,
+        username: generatedUsername,
         name: foundMember.fullName,
         role: 'MEMBER',
         roleId: 'role_member',
         memberId: foundMember.id,
         phone: foundMember.phone,
+        avatar: foundMember.avatar,
         isActive: true,
         createdAt: new Date().toISOString(),
+        lastLogin: new Date().toISOString(),
       };
-      const updated = [...users, newMemberUser];
+      const updated = [...users.filter((u) => u.id !== newMemberUser.id), newMemberUser];
       setUsers(updated);
       saveToStorage('users', updated);
       setCurrentUserId(newMemberUser.id);
@@ -260,12 +310,192 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     saveToStorage('users', updated);
   };
 
+  const updateUserProfile = (updates: {
+    name: string;
+    username?: string;
+    email: string;
+    phone?: string;
+    avatar?: string;
+    department?: string;
+    jobTitle?: string;
+    password?: string;
+    address?: string;
+    city?: string;
+    birthDate?: string;
+    gender?: 'L' | 'P' | 'OTHER';
+  }) => {
+    if (!currentUser) return;
+
+    // 1. Update user record
+    const userUpdates: Partial<User> = {
+      name: updates.name,
+      username: updates.username ? updates.username.toLowerCase().trim() : currentUser.username,
+      email: updates.email.trim(),
+      phone: updates.phone,
+      avatar: updates.avatar,
+      department: updates.department,
+      jobTitle: updates.jobTitle,
+      password: updates.password || currentUser.password,
+    };
+
+    const updatedUsers = users.map((u) =>
+      u.id === currentUser.id ? { ...u, ...userUpdates } : u
+    );
+    setUsers(updatedUsers);
+    saveToStorage('users', updatedUsers);
+
+    // 2. If user is tied to a member account, also update the member table
+    if (currentUser.memberId) {
+      const memberId = currentUser.memberId;
+      const updatedMembers = members.map((m) => {
+        if (m.id === memberId) {
+          return {
+            ...m,
+            fullName: updates.name,
+            nickname: updates.name.split(' ')[0],
+            username: updates.username ? updates.username.toLowerCase().trim() : m.username,
+            email: updates.email.trim(),
+            phone: updates.phone || m.phone,
+            avatar: updates.avatar || m.avatar,
+            password: updates.password || m.password,
+            address: updates.address !== undefined ? updates.address : m.address,
+            city: updates.city !== undefined ? updates.city : m.city,
+            birthDate: updates.birthDate !== undefined ? updates.birthDate : m.birthDate,
+            gender: updates.gender !== undefined ? updates.gender : m.gender,
+          };
+        }
+        return m;
+      });
+      setMembers(updatedMembers);
+      saveToStorage('members', updatedMembers);
+    }
+  };
+
+  const updateAdministrator = (userId: string, updates: Partial<User>) => {
+    const updatedUsers = users.map((u) => {
+      if (u.id === userId) {
+        return {
+          ...u,
+          ...updates,
+          username: updates.username ? updates.username.toLowerCase().trim() : u.username,
+        };
+      }
+      return u;
+    });
+    setUsers(updatedUsers);
+    saveToStorage('users', updatedUsers);
+  };
+
   const refreshMemberData = (updatedMember: Member) => {
     const updatedList = members.map((m) =>
       m.id === updatedMember.id ? updatedMember : m
     );
     setMembers(updatedList);
     saveToStorage('members', updatedList);
+  };
+
+  const findAccountByIdentifier = (identifier: string): { email: string; name: string; username?: string; avatar?: string } | null => {
+    const clean = identifier.toLowerCase().trim();
+    if (!clean) return null;
+
+    // Check users
+    const matchedUser = users.find(
+      (u) =>
+        u.email.toLowerCase().trim() === clean ||
+        (u.username && u.username.toLowerCase().trim() === clean) ||
+        (clean === 'superadmin' && u.role === 'SUPER_ADMIN') ||
+        (clean === 'admin' && u.role === 'ADMIN')
+    );
+    if (matchedUser) {
+      return {
+        email: matchedUser.email,
+        name: matchedUser.name,
+        username: matchedUser.username,
+        avatar: matchedUser.avatar,
+      };
+    }
+
+    // Check members
+    const matchedMember = members.find(
+      (m) =>
+        m.email.toLowerCase().trim() === clean ||
+        (m.username && m.username.toLowerCase().trim() === clean) ||
+        m.nickname.toLowerCase().trim() === clean
+    );
+    if (matchedMember) {
+      return {
+        email: matchedMember.email,
+        name: matchedMember.fullName,
+        username: matchedMember.username || matchedMember.nickname,
+        avatar: matchedMember.avatar,
+      };
+    }
+
+    // If identifier is a valid email format, return as plausible email
+    if (clean.includes('@') && clean.includes('.')) {
+      return {
+        email: clean,
+        name: clean.split('@')[0],
+      };
+    }
+
+    return null;
+  };
+
+  const resetPasswordWithRecovery = (emailOrUsername: string, newPassword: string): boolean => {
+    const clean = emailOrUsername.toLowerCase().trim();
+    if (!clean || !newPassword || newPassword.length < 6) return false;
+
+    let matched = false;
+
+    // 1. Update in users
+    const updatedUsers = users.map((u) => {
+      const match =
+        u.email.toLowerCase().trim() === clean ||
+        (u.username && u.username.toLowerCase().trim() === clean) ||
+        (clean === 'superadmin' && u.role === 'SUPER_ADMIN') ||
+        (clean === 'admin' && u.role === 'ADMIN');
+
+      if (match) {
+        matched = true;
+        return {
+          ...u,
+          password: newPassword.trim(),
+        };
+      }
+      return u;
+    });
+
+    if (matched) {
+      setUsers(updatedUsers);
+      saveToStorage('users', updatedUsers);
+    }
+
+    // 2. Update in members
+    let memberMatched = false;
+    const updatedMembers = members.map((m) => {
+      const match =
+        m.email.toLowerCase().trim() === clean ||
+        (m.username && m.username.toLowerCase().trim() === clean) ||
+        m.nickname.toLowerCase().trim() === clean;
+
+      if (match) {
+        memberMatched = true;
+        return {
+          ...m,
+          password: newPassword.trim(),
+        };
+      }
+      return m;
+    });
+
+    if (memberMatched) {
+      setMembers(updatedMembers);
+      saveToStorage('members', updatedMembers);
+      matched = true;
+    }
+
+    return matched;
   };
 
   return (
@@ -282,7 +512,11 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         logout,
         switchDemoRole,
         updateCurrentUser,
+        updateUserProfile,
+        updateAdministrator,
         refreshMemberData,
+        findAccountByIdentifier,
+        resetPasswordWithRecovery,
       }}
     >
       {children}

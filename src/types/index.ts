@@ -43,12 +43,17 @@ export type PermissionCode =
 export interface User {
   id: string;
   email: string;
+  username?: string; // Support login via username or email
   name: string;
   role: UserRoleType;
   roleId: string;
   memberId?: string; // If role is MEMBER
   avatar?: string;
   phone?: string;
+  department?: string; // For staff / admin
+  jobTitle?: string; // For staff / admin
+  password?: string;
+  notes?: string;
   isActive: boolean;
   createdAt: string;
   lastLogin?: string;
@@ -112,8 +117,10 @@ export interface Member {
   membershipNumber: string; // e.g. "LGH-001089"
   fullName: string;
   nickname: string;
+  username?: string; // Support login via username or email
   email: string;
   phone: string;
+  password?: string;
   gender: 'L' | 'P' | 'OTHER';
   birthDate: string; // YYYY-MM-DD
   address: string;

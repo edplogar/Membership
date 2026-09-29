@@ -2,6 +2,7 @@ import React, { useState } from 'react';
 import { useAuth } from '../../context/AuthContext';
 import { useApp } from '../../context/AppContext';
 import { LombokGardenLogo } from './LombokGardenLogo';
+import { UserProfileModal } from './UserProfileModal';
 import {
   Bell,
   LogOut,
@@ -9,6 +10,8 @@ import {
   Search,
   Check,
   LogIn,
+  Settings,
+  ShieldCheck,
 } from 'lucide-react';
 
 interface NavbarProps {
@@ -30,6 +33,7 @@ export const Navbar: React.FC<NavbarProps> = ({
   const { notifications, markNotificationRead, markAllNotificationsRead } = useApp();
   const [showNotifications, setShowNotifications] = useState(false);
   const [showUserMenu, setShowUserMenu] = useState(false);
+  const [isProfileModalOpen, setIsProfileModalOpen] = useState(false);
 
   // Filter notifications for current user or broad alerts
   const userNotifs = notifications.filter(
@@ -244,16 +248,34 @@ export const Navbar: React.FC<NavbarProps> = ({
                     </div>
                   </div>
 
+                  {/* Universal Profile Action for All Roles (Member, Admin, Super Admin) */}
+                  <button
+                    onClick={() => {
+                      setIsProfileModalOpen(true);
+                      setShowUserMenu(false);
+                    }}
+                    className="w-full px-3.5 py-2 text-left hover:bg-stone-800 text-xs text-stone-200 flex items-center gap-2 transition-colors cursor-pointer"
+                  >
+                    <User className="w-3.5 h-3.5 text-[#00A651]" />
+                    <span>
+                      {userRole === 'SUPER_ADMIN'
+                        ? 'Edit Profil Super Admin'
+                        : userRole === 'ADMIN'
+                        ? 'Edit Profil Administrator'
+                        : 'Edit Profil & Akun'}
+                    </span>
+                  </button>
+
                   {userRole === 'MEMBER' && (
                     <button
                       onClick={() => {
                         onTabChange('profile');
                         setShowUserMenu(false);
                       }}
-                      className="w-full px-3.5 py-2 text-left hover:bg-stone-800 text-xs text-stone-200 flex items-center gap-2 transition-colors cursor-pointer"
+                      className="w-full px-3.5 py-2 text-left hover:bg-stone-800 text-xs text-stone-300 flex items-center gap-2 transition-colors cursor-pointer"
                     >
-                      <User className="w-3.5 h-3.5 text-stone-400" />
-                      <span>Profil Saya</span>
+                      <Settings className="w-3.5 h-3.5 text-stone-400" />
+                      <span>Halaman Profil Member</span>
                     </button>
                   )}
 
@@ -262,7 +284,7 @@ export const Navbar: React.FC<NavbarProps> = ({
                       logout();
                       setShowUserMenu(false);
                     }}
-                    className="w-full px-3.5 py-2 text-left hover:bg-stone-800 text-xs text-rose-400 flex items-center gap-2 transition-colors cursor-pointer"
+                    className="w-full px-3.5 py-2 text-left hover:bg-stone-800 text-xs text-rose-400 flex items-center gap-2 transition-colors cursor-pointer border-t border-stone-800 mt-1 pt-2"
                   >
                     <LogOut className="w-3.5 h-3.5" />
                     <span>Keluar / Logout</span>
@@ -301,6 +323,12 @@ export const Navbar: React.FC<NavbarProps> = ({
           );
         })}
       </div>
+
+      {/* Universal User Profile Edit Modal */}
+      <UserProfileModal
+        isOpen={isProfileModalOpen}
+        onClose={() => setIsProfileModalOpen(false)}
+      />
     </header>
   );
 };
