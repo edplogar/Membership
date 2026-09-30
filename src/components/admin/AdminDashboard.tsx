@@ -1,6 +1,7 @@
 import React from 'react';
 import { useApp } from '../../context/AppContext';
 import { formatIDR, formatDateIndo } from '../../services/membershipEngine';
+import { DashboardWidget } from './DashboardWidget';
 import {
   Users,
   Building2,
@@ -182,6 +183,13 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
           </div>
         </div>
       </div>
+
+      {/* Daily Active Members & New Sign-ups Chart Widget */}
+      <DashboardWidget
+        title="Tren Aktivitas & Pertumbuhan Member"
+        subtitle="Analisis pergerakan member aktif harian dan pendaftaran member baru (Lombok Garden Hotel)"
+        defaultDays={7}
+      />
 
       {/* Visual Distribution & Analytics Section */}
       <div className="grid grid-cols-1 lg:grid-cols-12 gap-8 items-start">

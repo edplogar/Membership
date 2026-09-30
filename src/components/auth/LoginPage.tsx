@@ -665,18 +665,9 @@ export const LoginPage: React.FC<LoginPageProps> = ({ onSuccess }) => {
                         </div>
                       </div>
 
-                      <div className="pt-2">
-                        <button
-                          type="button"
-                          onClick={() => {
-                            setAuthMode('reset');
-                            setResetEmail(recoveryData?.email || '');
-                          }}
-                          className="w-full py-2.5 bg-[#00A651] hover:bg-[#008F45] text-white rounded-xl text-xs font-bold flex items-center justify-center gap-2 transition-all shadow-xs cursor-pointer"
-                        >
-                          <span>Buka Form Atur Ulang Kata Sandi Baru</span>
-                          <ArrowRight className="w-3.5 h-3.5" />
-                        </button>
+                      <div className="p-3 bg-white/80 rounded-xl border border-emerald-200/80 text-[11px] text-stone-600 flex items-center gap-2">
+                        <Shield className="w-4 h-4 text-[#00A651] shrink-0" />
+                        <span>Untuk keamanan akun, silakan klik tautan resmi yang tertera pada email Anda untuk mereset kata sandi.</span>
                       </div>
                     </div>
 

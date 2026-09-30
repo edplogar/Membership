@@ -2,7 +2,9 @@ import React, { useState } from 'react';
 import { Member, MembershipTier } from '../../types';
 import { useApp } from '../../context/AppContext';
 import { useAuth } from '../../context/AuthContext';
+import { useToast } from '../../context/ToastContext';
 import { formatIDR, formatDateIndo } from '../../services/membershipEngine';
+import { sendFirebasePasswordResetEmail } from '../../services/firebase';
 import { Modal } from '../common/Modal';
 import { ConfirmDialog } from '../common/ConfirmDialog';
 import { QRCodeView } from '../common/QRCodeView';
@@ -21,6 +23,7 @@ import {
   Calendar,
   CheckCircle,
   Trash2,
+  KeyRound,
 } from 'lucide-react';
 
 interface MemberDetailModalProps {
@@ -43,9 +46,14 @@ export const MemberDetailModal: React.FC<MemberDetailModalProps> = ({
   onActionChangeTier,
 }) => {
   const { tiers, stays, transactions, pointTransactions, redemptions, deleteMember } = useApp();
-  const { userRole } = useAuth();
+  const { userRole, resetPasswordWithRecovery } = useAuth();
+  const { showToast } = useToast();
   const [activeTab, setActiveTab] = useState<'profile' | 'stays' | 'spending' | 'loyalty' | 'timeline'>('profile');
   const [isConfirmDeleteOpen, setIsConfirmDeleteOpen] = useState(false);
+  const [isResetPasswordOpen, setIsResetPasswordOpen] = useState(false);
+  const [newPassword, setNewPassword] = useState('');
+  const [confirmPassword, setConfirmPassword] = useState('');
+  const [isLoading, setIsLoading] = useState(false);
 
   if (!member) return null;
 
@@ -121,6 +129,23 @@ export const MemberDetailModal: React.FC<MemberDetailModalProps> = ({
                 className="px-3 py-1.5 bg-stone-800 hover:bg-stone-700 text-stone-200 rounded-lg text-xs font-semibold border border-stone-700 transition-colors"
               >
                 Ubah Tier
+              </button>
+            )}
+
+            {/* Super Admin Reset Password Action */}
+            {userRole === 'SUPER_ADMIN' && (
+              <button
+                type="button"
+                onClick={() => {
+                  setNewPassword('');
+                  setConfirmPassword('');
+                  setIsResetPasswordOpen(true);
+                }}
+                className="px-3 py-1.5 bg-amber-600/20 hover:bg-amber-600 text-amber-300 hover:text-white rounded-lg text-xs font-semibold border border-amber-500/40 transition-colors flex items-center gap-1.5 cursor-pointer"
+                title="Atur Ulang Kata Sandi Akun Member (Khusus Super Admin)"
+              >
+                <KeyRound className="w-3.5 h-3.5" />
+                <span>Reset Sandi</span>
               </button>
             )}
 
@@ -473,6 +498,125 @@ export const MemberDetailModal: React.FC<MemberDetailModalProps> = ({
           </div>
         )}
       </div>
+
+      {/* Super Admin Password Reset Modal */}
+      <Modal
+        isOpen={isResetPasswordOpen}
+        onClose={() => {
+          setIsResetPasswordOpen(false);
+          setNewPassword('');
+          setConfirmPassword('');
+        }}
+        title="Atur Ulang Kata Sandi Akun Member"
+        subtitle={`Kredensial Login: ${member.fullName} (${member.membershipNumber})`}
+        maxWidth="lg"
+      >
+        <div className="space-y-4 text-xs">
+          <div className="p-3.5 bg-amber-50 border border-amber-200 rounded-xl text-amber-900 flex items-start gap-2.5">
+            <Shield className="w-4 h-4 text-amber-700 shrink-0 mt-0.5" />
+            <div className="leading-relaxed">
+              <strong>Hak Akses Super Admin:</strong> Anda dapat menetapkan kata sandi baru untuk member ini atau mengirimkan email reset resmi ke <strong>{member.email}</strong>.
+            </div>
+          </div>
+
+          <form
+            onSubmit={(e) => {
+              e.preventDefault();
+              if (!newPassword || newPassword.length < 6) {
+                showToast('Kata sandi baru minimal harus 6 karakter.', 'error');
+                return;
+              }
+              if (newPassword !== confirmPassword) {
+                showToast('Konfirmasi kata sandi tidak cocok.', 'error');
+                return;
+              }
+
+              setIsLoading(true);
+              const success = resetPasswordWithRecovery(member.email, newPassword);
+              setIsLoading(false);
+
+              if (success) {
+                showToast(`Kata sandi untuk ${member.fullName} berhasil diperbarui!`, 'success');
+                setIsResetPasswordOpen(false);
+                setNewPassword('');
+                setConfirmPassword('');
+              } else {
+                showToast('Gagal mengubah kata sandi.', 'error');
+              }
+            }}
+            className="space-y-3 pt-2 border-t border-stone-200"
+          >
+            <h4 className="font-bold text-stone-900 flex items-center gap-1.5">
+              <KeyRound className="w-3.5 h-3.5 text-amber-600" />
+              <span>1. Tetapkan Kata Sandi Baru Secara Manual</span>
+            </h4>
+
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+              <div>
+                <label className="block text-stone-700 font-semibold mb-1">
+                  Kata Sandi Baru *
+                </label>
+                <input
+                  type="password"
+                  value={newPassword}
+                  onChange={(e) => setNewPassword(e.target.value)}
+                  placeholder="Min. 6 karakter"
+                  className="w-full px-3 py-2 bg-stone-50 border border-stone-300 rounded-xl text-xs font-mono"
+                  autoComplete="new-password"
+                />
+              </div>
+
+              <div>
+                <label className="block text-stone-700 font-semibold mb-1">
+                  Konfirmasi Kata Sandi *
+                </label>
+                <input
+                  type="password"
+                  value={confirmPassword}
+                  onChange={(e) => setConfirmPassword(e.target.value)}
+                  placeholder="Ketik ulang sandi"
+                  className="w-full px-3 py-2 bg-stone-50 border border-stone-300 rounded-xl text-xs font-mono"
+                  autoComplete="new-password"
+                />
+              </div>
+            </div>
+
+            <button
+              type="submit"
+              disabled={isLoading || !newPassword}
+              className="w-full py-2.5 bg-amber-600 hover:bg-amber-700 text-white rounded-xl font-bold flex items-center justify-center gap-2 shadow-xs transition-colors cursor-pointer disabled:opacity-50"
+            >
+              <KeyRound className="w-3.5 h-3.5" />
+              <span>{isLoading ? 'Memperbarui...' : 'Simpan & Terapkan Kata Sandi Baru'}</span>
+            </button>
+          </form>
+
+          <div className="pt-3 border-t border-stone-200 space-y-2">
+            <h4 className="font-bold text-stone-900 flex items-center gap-1.5">
+              <Mail className="w-3.5 h-3.5 text-emerald-700" />
+              <span>2. Atau Kirim Tautan Reset ke Email Tamu</span>
+            </h4>
+            <button
+              type="button"
+              onClick={async () => {
+                setIsLoading(true);
+                await sendFirebasePasswordResetEmail(member.email, {
+                  name: member.fullName,
+                  phone: member.phone,
+                  membershipNumber: member.membershipNumber,
+                });
+                setIsLoading(false);
+                showToast(`Tautan reset kata sandi telah dikirim ke ${member.email}.`, 'success');
+                setIsResetPasswordOpen(false);
+              }}
+              disabled={isLoading}
+              className="w-full py-2.5 bg-stone-800 hover:bg-stone-900 text-white rounded-xl font-semibold flex items-center justify-center gap-2 transition-colors cursor-pointer disabled:opacity-50"
+            >
+              <span>Kirim Tautan Reset ke {member.email}</span>
+            </button>
+          </div>
+        </div>
+      </Modal>
 
       {/* Delete Member Confirmation Dialog (SUPER ADMIN ONLY) */}
       <ConfirmDialog

@@ -1,4 +1,4 @@
-export type UserRoleType = 'MEMBER' | 'ADMIN' | 'SUPER_ADMIN';
+export type UserRoleType = 'MEMBER' | 'ADMIN' | 'SUPER_ADMIN' | 'OPERATOR_FO' | 'OPERATOR_FB';
 
 export type PermissionCode =
   | 'member.view'

@@ -45,7 +45,7 @@ export const MemberList: React.FC<MemberListProps> = ({
   onCloseAddModal: externalAddClose,
 }) => {
   const { members, tiers, addMember, updateMember, deleteMember } = useApp();
-  const { hasPermission, userRole } = useAuth();
+  const { hasPermission, userRole, resetPasswordWithRecovery } = useAuth();
   const { showToast } = useToast();
 
   const [searchQuery, setSearchQuery] = useState('');
@@ -66,6 +66,9 @@ export const MemberList: React.FC<MemberListProps> = ({
 
   const [memberToDelete, setMemberToDelete] = useState<Member | null>(null);
   const [memberToResetPassword, setMemberToResetPassword] = useState<Member | null>(null);
+  const [adminNewPassword, setAdminNewPassword] = useState('');
+  const [adminConfirmPassword, setAdminConfirmPassword] = useState('');
+  const [isResetActionLoading, setIsResetActionLoading] = useState(false);
 
   // Form State for Add Member
   const [newMemberForm, setNewMemberForm] = useState({
@@ -434,14 +437,20 @@ export const MemberList: React.FC<MemberListProps> = ({
                             )}
                           </button>
 
-                          {/* Reset password */}
-                          <button
-                            onClick={() => setMemberToResetPassword(m)}
-                            className="p-1.5 text-stone-400 hover:text-stone-700 hover:bg-stone-100 rounded-lg transition-colors"
-                            title="Reset Kata Sandi Member"
-                          >
-                            <KeyRound className="w-3.5 h-3.5" />
-                          </button>
+                          {/* Reset password - STRICTLY FOR SUPER ADMIN */}
+                          {userRole === 'SUPER_ADMIN' && (
+                            <button
+                              onClick={() => {
+                                setMemberToResetPassword(m);
+                                setAdminNewPassword('');
+                                setAdminConfirmPassword('');
+                              }}
+                              className="p-1.5 text-amber-600 hover:text-amber-800 hover:bg-amber-50 rounded-lg transition-colors"
+                              title="Atur Ulang Kata Sandi Member (Khusus Super Admin)"
+                            >
+                              <KeyRound className="w-3.5 h-3.5" />
+                            </button>
+                          )}
 
                           {/* Delete Member - STRICTLY FOR SUPER ADMIN */}
                           {userRole === 'SUPER_ADMIN' && (
@@ -681,28 +690,150 @@ export const MemberList: React.FC<MemberListProps> = ({
         </form>
       </Modal>
 
-      {/* Reset Password Dialog */}
-      <ConfirmDialog
+      {/* Super Admin Dedicated Member Password Reset Modal */}
+      <Modal
         isOpen={Boolean(memberToResetPassword)}
-        onClose={() => setMemberToResetPassword(null)}
-        onConfirm={async () => {
-          if (memberToResetPassword) {
-            await sendFirebasePasswordResetEmail(memberToResetPassword.email, {
-              name: memberToResetPassword.fullName,
-              phone: memberToResetPassword.phone,
-              membershipNumber: memberToResetPassword.membershipNumber,
-            });
-            showToast(
-              `Instruksi dan tautan reset kata sandi telah dikirim ke ${memberToResetPassword.email}.`,
-              'success'
-            );
-            setMemberToResetPassword(null);
-          }
+        onClose={() => {
+          setMemberToResetPassword(null);
+          setAdminNewPassword('');
+          setAdminConfirmPassword('');
         }}
-        title="Reset Kata Sandi Member?"
-        message={`Kirimkan tautan dan instruksi reset kata sandi resmi hotel ke alamat email: ${memberToResetPassword?.email} (${memberToResetPassword?.fullName})?`}
-        confirmText="Kirim Tautan Reset"
-      />
+        title="Atur Ulang Kata Sandi Akun Member"
+        subtitle={`Manajemen Keamanan Kredensial: ${memberToResetPassword?.fullName} (${memberToResetPassword?.membershipNumber})`}
+        maxWidth="lg"
+      >
+        <div className="space-y-4 text-xs">
+          <div className="p-3.5 bg-amber-50 border border-amber-200 rounded-xl text-amber-900 flex items-start gap-2.5">
+            <Shield className="w-4 h-4 text-amber-700 shrink-0 mt-0.5" />
+            <div className="leading-relaxed">
+              <strong>Hak Akses Super Admin:</strong> Anda dapat menetapkan kata sandi baru secara langsung untuk member ini atau mengirimkan email reset resmi ke alamat email terdaftar.
+            </div>
+          </div>
+
+          <div className="p-3 bg-stone-50 border border-stone-200 rounded-xl space-y-1 font-mono text-[11px]">
+            <div className="flex justify-between">
+              <span className="text-stone-500">Nama Lengkap:</span>
+              <span className="font-bold text-stone-900">{memberToResetPassword?.fullName}</span>
+            </div>
+            <div className="flex justify-between">
+              <span className="text-stone-500">Email Akun (Login):</span>
+              <span className="font-bold text-emerald-800">{memberToResetPassword?.email}</span>
+            </div>
+            <div className="flex justify-between">
+              <span className="text-stone-500">Nomor Member:</span>
+              <span className="font-bold text-stone-900">{memberToResetPassword?.membershipNumber}</span>
+            </div>
+          </div>
+
+          {/* Direct Password Reset Form */}
+          <form
+            onSubmit={(e) => {
+              e.preventDefault();
+              if (!memberToResetPassword) return;
+              if (!adminNewPassword || adminNewPassword.length < 6) {
+                showToast('Kata sandi baru minimal harus 6 karakter.', 'error');
+                return;
+              }
+              if (adminNewPassword !== adminConfirmPassword) {
+                showToast('Konfirmasi kata sandi tidak cocok.', 'error');
+                return;
+              }
+
+              setIsResetActionLoading(true);
+              const success = resetPasswordWithRecovery(memberToResetPassword.email, adminNewPassword);
+              setIsResetActionLoading(false);
+
+              if (success) {
+                showToast(`Kata sandi untuk member ${memberToResetPassword.fullName} berhasil diubah!`, 'success');
+                setMemberToResetPassword(null);
+                setAdminNewPassword('');
+                setAdminConfirmPassword('');
+              } else {
+                showToast('Gagal mengubah kata sandi member.', 'error');
+              }
+            }}
+            className="space-y-3 pt-2 border-t border-stone-200"
+          >
+            <h4 className="font-bold text-stone-900 flex items-center gap-1.5">
+              <KeyRound className="w-3.5 h-3.5 text-amber-600" />
+              <span>1. Tetapkan Kata Sandi Baru Secara Manual</span>
+            </h4>
+
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+              <div>
+                <label className="block text-stone-700 font-semibold mb-1">
+                  Kata Sandi Baru *
+                </label>
+                <input
+                  type="password"
+                  value={adminNewPassword}
+                  onChange={(e) => setAdminNewPassword(e.target.value)}
+                  placeholder="Min. 6 karakter"
+                  className="w-full px-3 py-2 bg-stone-50 border border-stone-300 rounded-xl text-xs font-mono"
+                  autoComplete="new-password"
+                />
+              </div>
+
+              <div>
+                <label className="block text-stone-700 font-semibold mb-1">
+                  Konfirmasi Kata Sandi *
+                </label>
+                <input
+                  type="password"
+                  value={adminConfirmPassword}
+                  onChange={(e) => setAdminConfirmPassword(e.target.value)}
+                  placeholder="Ketik ulang sandi baru"
+                  className="w-full px-3 py-2 bg-stone-50 border border-stone-300 rounded-xl text-xs font-mono"
+                  autoComplete="new-password"
+                />
+              </div>
+            </div>
+
+            <button
+              type="submit"
+              disabled={isResetActionLoading || !adminNewPassword}
+              className="w-full py-2.5 bg-amber-600 hover:bg-amber-700 text-white rounded-xl font-bold flex items-center justify-center gap-2 shadow-xs transition-colors cursor-pointer disabled:opacity-50"
+            >
+              <KeyRound className="w-3.5 h-3.5" />
+              <span>{isResetActionLoading ? 'Memperbarui...' : 'Simpan & Terapkan Kata Sandi Baru'}</span>
+            </button>
+          </form>
+
+          {/* Alternative: Dispatch Reset Email */}
+          <div className="pt-3 border-t border-stone-200 space-y-2">
+            <h4 className="font-bold text-stone-900 flex items-center gap-1.5">
+              <Shield className="w-3.5 h-3.5 text-emerald-700" />
+              <span>2. Atau Kirim Tautan Reset ke Email Tamu</span>
+            </h4>
+            <p className="text-stone-500 text-[11px]">
+              Tamu akan menerima email berisi tautan resmi untuk membuat kata sandi mandiri.
+            </p>
+            <button
+              type="button"
+              onClick={async () => {
+                if (memberToResetPassword) {
+                  setIsResetActionLoading(true);
+                  await sendFirebasePasswordResetEmail(memberToResetPassword.email, {
+                    name: memberToResetPassword.fullName,
+                    phone: memberToResetPassword.phone,
+                    membershipNumber: memberToResetPassword.membershipNumber,
+                  });
+                  setIsResetActionLoading(false);
+                  showToast(
+                    `Instruksi dan tautan reset kata sandi telah dikirim ke ${memberToResetPassword.email}.`,
+                    'success'
+                  );
+                  setMemberToResetPassword(null);
+                }
+              }}
+              disabled={isResetActionLoading}
+              className="w-full py-2.5 bg-stone-800 hover:bg-stone-900 text-white rounded-xl font-semibold flex items-center justify-center gap-2 transition-colors cursor-pointer disabled:opacity-50"
+            >
+              <span>Kirim Tautan Reset ke Email Member</span>
+            </button>
+          </div>
+        </div>
+      </Modal>
 
       {/* Delete Member Dialog - Strictly SUPER ADMIN */}
       <ConfirmDialog

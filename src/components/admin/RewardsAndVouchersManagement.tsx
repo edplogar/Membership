@@ -8,6 +8,12 @@ import { ConfirmDialog } from '../common/ConfirmDialog';
 import { VoucherScannerModal } from './VoucherScannerModal';
 import { exportToCSV } from '../../services/exportService';
 import {
+  validateVoucherCreation,
+  validateVoucherRule,
+  VoucherValidationResult,
+  VoucherRuleEvaluationResult,
+} from '../../services/voucherValidationService';
+import {
   Gift,
   Ticket,
   Tag,
@@ -29,6 +35,12 @@ import {
   ShieldCheck,
   AlertCircle,
   Lock,
+  Play,
+  Check,
+  X,
+  HelpCircle,
+  Info,
+  Calendar,
 } from 'lucide-react';
 
 export const RewardsAndVouchersManagement: React.FC = () => {
@@ -47,21 +59,42 @@ export const RewardsAndVouchersManagement: React.FC = () => {
     savePromotion,
     deletePromotion,
   } = useApp();
-  const { currentUser, hasPermission } = useAuth();
+  const { currentUser, userRole, hasPermission } = useAuth();
+
+  // Rule enforcement: Check if user is Super Admin (Super User)
+  const isSuperUser =
+    userRole === 'SUPER_ADMIN' ||
+    currentUser?.role === 'SUPER_ADMIN';
 
   // Rule enforcement: Check if current staff is restricted to barcode scan only (FO / FB staff)
   const isScanOnlyStaff =
-    hasPermission('voucher.scan_only') ||
-    currentUser?.roleId === 'role_front_office' ||
-    currentUser?.roleId === 'role_food_beverage' ||
-    currentUser?.department?.toLowerCase().includes('front office') ||
-    currentUser?.department?.toLowerCase().includes('food') ||
-    currentUser?.department?.toLowerCase().includes('f&b');
+    !isSuperUser &&
+    (hasPermission('voucher.scan_only') ||
+      userRole === 'OPERATOR_FO' ||
+      userRole === 'OPERATOR_FB' ||
+      currentUser?.role === 'OPERATOR_FO' ||
+      currentUser?.role === 'OPERATOR_FB' ||
+      currentUser?.roleId === 'role_operator_fo' ||
+      currentUser?.roleId === 'role_operator_fb' ||
+      currentUser?.department?.toLowerCase().includes('front office') ||
+      currentUser?.department?.toLowerCase().includes('food') ||
+      currentUser?.department?.toLowerCase().includes('f&b'));
 
   const [activeTab, setActiveTab] = useState<'rewards' | 'vouchers' | 'promotions' | 'history'>('vouchers');
   const [isVoucherScannerOpen, setIsVoucherScannerOpen] = useState(false);
   const [historySearchQuery, setHistorySearchQuery] = useState('');
   const [historyOutletFilter, setHistoryOutletFilter] = useState('all');
+
+  // Quick stock adjuster for Super Admin
+  const handleAdjustRewardStock = (reward: Reward, delta: number) => {
+    const updatedStock = Math.max(0, (reward.stock || 0) + delta);
+    saveReward({ ...reward, stock: updatedStock });
+  };
+
+  const handleAdjustVoucherLimit = (voucher: Voucher, delta: number) => {
+    const updatedLimit = Math.max(1, (voucher.usageLimit || 0) + delta);
+    saveVoucher({ ...voucher, usageLimit: updatedLimit });
+  };
 
   // Modals state
   const [editingReward, setEditingReward] = useState<Reward | null>(null);
@@ -116,6 +149,36 @@ export const RewardsAndVouchersManagement: React.FC = () => {
     status: 'active',
   };
 
+  // Voucher Validation Simulator State
+  const [isSimulatorOpen, setIsSimulatorOpen] = useState(false);
+  const [simCode, setSimCode] = useState('');
+  const [simTierId, setSimTierId] = useState('tier_gold');
+  const [simAmount, setSimAmount] = useState<number>(1500000);
+  const [simDate, setSimDate] = useState<string>(new Date().toISOString().slice(0, 10));
+  const [simOutlet, setSimOutlet] = useState('Front Desk');
+  const [simMemberUsage, setSimMemberUsage] = useState<number>(0);
+
+  // Derived validation for current voucher being edited
+  const voucherValidation = editingVoucher
+    ? validateVoucherCreation(editingVoucher, vouchers, editingVoucher.id)
+    : { isValid: true, errors: {}, warnings: [] };
+
+  // Derived simulation calculation
+  const simSelectedVoucher = vouchers.find(
+    (v) =>
+      v.code.toUpperCase() === simCode.trim().toUpperCase() ||
+      v.id === simCode
+  );
+  const simEvaluationResult = simSelectedVoucher
+    ? validateVoucherRule(simSelectedVoucher, {
+        memberTierId: simTierId,
+        transactionAmount: simAmount,
+        date: simDate,
+        outlet: simOutlet,
+        memberUsageCount: simMemberUsage,
+      })
+    : null;
+
   const handleSaveReward = (e: React.FormEvent) => {
     e.preventDefault();
     if (editingReward) saveReward(editingReward);
@@ -124,7 +187,11 @@ export const RewardsAndVouchersManagement: React.FC = () => {
 
   const handleSaveVoucher = (e: React.FormEvent) => {
     e.preventDefault();
-    if (editingVoucher) saveVoucher(editingVoucher);
+    if (!editingVoucher) return;
+    if (!voucherValidation.isValid) {
+      return;
+    }
+    saveVoucher(editingVoucher);
     setEditingVoucher(null);
   };
 
@@ -402,13 +469,28 @@ export const RewardsAndVouchersManagement: React.FC = () => {
                 <span>Pindai Barcode Tamu</span>
               </button>
             ) : (
-              <button
-                onClick={() => setEditingVoucher(defaultVoucher)}
-                className="px-3.5 py-2 bg-emerald-800 hover:bg-emerald-900 text-white rounded-xl text-xs font-semibold flex items-center gap-1.5 shadow-xs cursor-pointer"
-              >
-                <Plus className="w-4 h-4" />
-                <span>+ Buat Voucher Baru</span>
-              </button>
+              <div className="flex items-center gap-2">
+                <button
+                  type="button"
+                  onClick={() => {
+                    if (vouchers.length > 0) {
+                      setSimCode(vouchers[0].code);
+                    }
+                    setIsSimulatorOpen(true);
+                  }}
+                  className="px-3.5 py-2 bg-stone-100 hover:bg-stone-200 text-stone-800 rounded-xl text-xs font-semibold flex items-center gap-1.5 border border-stone-300 transition-colors cursor-pointer"
+                >
+                  <Sparkles className="w-4 h-4 text-amber-600" />
+                  <span>Validasi & Simulator Aturan</span>
+                </button>
+                <button
+                  onClick={() => setEditingVoucher(defaultVoucher)}
+                  className="px-3.5 py-2 bg-emerald-800 hover:bg-emerald-900 text-white rounded-xl text-xs font-semibold flex items-center gap-1.5 shadow-xs cursor-pointer"
+                >
+                  <Plus className="w-4 h-4" />
+                  <span>+ Buat Voucher Baru</span>
+                </button>
+              </div>
             )}
           </div>
 
@@ -859,16 +941,41 @@ export const RewardsAndVouchersManagement: React.FC = () => {
         </Modal>
       )}
 
-      {/* Edit Voucher Modal */}
+      {/* Edit Voucher Modal with Comprehensive Real-time Validation */}
       {editingVoucher && (
         <Modal
           isOpen={true}
           onClose={() => setEditingVoucher(null)}
-          title="Konfigurasi Kupon Voucher"
-          maxWidth="lg"
+          title={editingVoucher.id.startsWith('vch_') && !vouchers.some(v => v.id === editingVoucher.id) ? 'Buat Kupon Voucher Baru' : 'Edit Konfigurasi Kupon Voucher'}
+          maxWidth="2xl"
         >
           <form onSubmit={handleSaveVoucher} className="space-y-4">
-            <div className="grid grid-cols-2 gap-4">
+            {/* Real-time Validation Summary Warning if errors exist */}
+            {!voucherValidation.isValid && Object.keys(voucherValidation.errors).length > 0 && (
+              <div className="p-3 bg-rose-50 border border-rose-200 rounded-xl text-rose-800 text-xs flex items-start gap-2">
+                <AlertCircle className="w-4 h-4 text-rose-600 shrink-0 mt-0.5" />
+                <div>
+                  <span className="font-bold">Periksa kembali data voucher:</span>
+                  <ul className="list-disc list-inside mt-1 space-y-0.5 text-[11px]">
+                    {Object.values(voucherValidation.errors).map((err, idx) => (
+                      <li key={idx}>{err}</li>
+                    ))}
+                  </ul>
+                </div>
+              </div>
+            )}
+
+            {/* Warnings list */}
+            {voucherValidation.warnings.length > 0 && (
+              <div className="p-2.5 bg-amber-50 border border-amber-200 rounded-xl text-amber-800 text-xs flex items-center gap-2">
+                <Info className="w-4 h-4 text-amber-600 shrink-0" />
+                <div className="text-[11px]">
+                  {voucherValidation.warnings.join(' ')}
+                </div>
+              </div>
+            )}
+
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
               <div>
                 <label className="block text-xs font-semibold text-stone-700 mb-1">
                   Kode Kupon Voucher *
@@ -879,17 +986,27 @@ export const RewardsAndVouchersManagement: React.FC = () => {
                   onChange={(e) =>
                     setEditingVoucher({
                       ...editingVoucher,
-                      code: e.target.value.toUpperCase(),
+                      code: e.target.value.toUpperCase().replace(/\s+/g, '-'),
                     })
                   }
-                  className="w-full px-3 py-2 bg-stone-50 border border-stone-200 rounded-xl text-xs font-mono font-bold"
+                  placeholder="Contoh: PROMO-HOLIDAY-20"
+                  className={`w-full px-3 py-2 bg-stone-50 border rounded-xl text-xs font-mono font-bold uppercase transition-colors ${
+                    voucherValidation.errors.code
+                      ? 'border-rose-400 bg-rose-50/50 focus:ring-rose-500'
+                      : 'border-stone-200 focus:border-emerald-600'
+                  }`}
                   required
                 />
+                {voucherValidation.errors.code && (
+                  <p className="text-[10px] text-rose-600 font-medium mt-1">
+                    {voucherValidation.errors.code}
+                  </p>
+                )}
               </div>
 
               <div>
                 <label className="block text-xs font-semibold text-stone-700 mb-1">
-                  Tipe Diskon
+                  Tipe Diskon *
                 </label>
                 <select
                   value={editingVoucher.type}
@@ -900,14 +1017,14 @@ export const RewardsAndVouchersManagement: React.FC = () => {
                 >
                   <option value="percent">Persentase (%)</option>
                   <option value="fixed">Nominal Tetap (IDR)</option>
-                  <option value="complimentary">Complimentary Service</option>
+                  <option value="complimentary">Complimentary Service (100%)</option>
                 </select>
               </div>
             </div>
 
             <div>
               <label className="block text-xs font-semibold text-stone-700 mb-1">
-                Nama Voucher *
+                Nama / Judul Voucher *
               </label>
               <input
                 type="text"
@@ -915,18 +1032,47 @@ export const RewardsAndVouchersManagement: React.FC = () => {
                 onChange={(e) =>
                   setEditingVoucher({ ...editingVoucher, title: e.target.value })
                 }
-                className="w-full px-3 py-2 bg-stone-50 border border-stone-200 rounded-xl text-xs"
+                placeholder="Contoh: Diskon Menginap Weekend 20%"
+                className={`w-full px-3 py-2 bg-stone-50 border rounded-xl text-xs transition-colors ${
+                  voucherValidation.errors.title
+                    ? 'border-rose-400 bg-rose-50/50'
+                    : 'border-stone-200 focus:border-emerald-600'
+                }`}
                 required
+              />
+              {voucherValidation.errors.title && (
+                <p className="text-[10px] text-rose-600 font-medium mt-1">
+                  {voucherValidation.errors.title}
+                </p>
+              )}
+            </div>
+
+            <div>
+              <label className="block text-xs font-semibold text-stone-700 mb-1">
+                Deskripsi Voucher
+              </label>
+              <textarea
+                rows={2}
+                value={editingVoucher.description}
+                onChange={(e) =>
+                  setEditingVoucher({ ...editingVoucher, description: e.target.value })
+                }
+                placeholder="Deskripsi syarat, outlet penggunaan, atau ketentuan khusus..."
+                className="w-full px-3 py-2 bg-stone-50 border border-stone-200 rounded-xl text-xs"
               />
             </div>
 
-            <div className="grid grid-cols-2 gap-4">
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
               <div>
                 <label className="block text-xs font-semibold text-stone-700 mb-1">
-                  Nilai Diskon (% atau IDR)
+                  {editingVoucher.type === 'percent'
+                    ? 'Nilai Diskon (%) *'
+                    : 'Nilai Diskon (Rp) *'}
                 </label>
                 <input
                   type="number"
+                  min={1}
+                  max={editingVoucher.type === 'percent' ? 100 : undefined}
                   value={editingVoucher.discountValue}
                   onChange={(e) =>
                     setEditingVoucher({
@@ -934,16 +1080,48 @@ export const RewardsAndVouchersManagement: React.FC = () => {
                       discountValue: parseInt(e.target.value) || 0,
                     })
                   }
-                  className="w-full px-3 py-2 bg-stone-50 border border-stone-200 rounded-xl text-xs font-mono"
+                  className={`w-full px-3 py-2 bg-stone-50 border rounded-xl text-xs font-mono font-bold ${
+                    voucherValidation.errors.discountValue
+                      ? 'border-rose-400 bg-rose-50/50'
+                      : 'border-stone-200'
+                  }`}
                 />
+                {voucherValidation.errors.discountValue && (
+                  <p className="text-[10px] text-rose-600 font-medium mt-1">
+                    {voucherValidation.errors.discountValue}
+                  </p>
+                )}
               </div>
 
               <div>
                 <label className="block text-xs font-semibold text-stone-700 mb-1">
-                  Minimal Transaksi (IDR)
+                  Maksimal Diskon (Rp)
                 </label>
                 <input
                   type="number"
+                  min={0}
+                  step={10000}
+                  value={editingVoucher.maxDiscount}
+                  onChange={(e) =>
+                    setEditingVoucher({
+                      ...editingVoucher,
+                      maxDiscount: parseInt(e.target.value) || 0,
+                    })
+                  }
+                  placeholder="0 = Tanpa batas"
+                  className="w-full px-3 py-2 bg-stone-50 border border-stone-200 rounded-xl text-xs font-mono"
+                />
+                <span className="text-[10px] text-stone-400">0 = tanpa batas</span>
+              </div>
+
+              <div>
+                <label className="block text-xs font-semibold text-stone-700 mb-1">
+                  Minimal Transaksi (Rp)
+                </label>
+                <input
+                  type="number"
+                  min={0}
+                  step={50000}
                   value={editingVoucher.minTransaction}
                   onChange={(e) =>
                     setEditingVoucher({
@@ -951,27 +1129,528 @@ export const RewardsAndVouchersManagement: React.FC = () => {
                       minTransaction: parseInt(e.target.value) || 0,
                     })
                   }
-                  className="w-full px-3 py-2 bg-stone-50 border border-stone-200 rounded-xl text-xs font-mono"
+                  className={`w-full px-3 py-2 bg-stone-50 border rounded-xl text-xs font-mono ${
+                    voucherValidation.errors.minTransaction
+                      ? 'border-rose-400 bg-rose-50/50'
+                      : 'border-stone-200'
+                  }`}
                 />
+                {voucherValidation.errors.minTransaction && (
+                  <p className="text-[10px] text-rose-600 font-medium mt-1">
+                    {voucherValidation.errors.minTransaction}
+                  </p>
+                )}
               </div>
             </div>
 
-            <div className="pt-4 flex items-center justify-end gap-3 border-t border-stone-200">
-              <button
-                type="button"
-                onClick={() => setEditingVoucher(null)}
-                className="px-4 py-2 text-xs font-semibold text-stone-600 hover:bg-stone-100 rounded-xl"
-              >
-                Batal
-              </button>
-              <button
-                type="submit"
-                className="px-5 py-2 text-xs font-semibold bg-emerald-800 hover:bg-emerald-900 text-white rounded-xl"
-              >
-                Simpan Voucher
-              </button>
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              <div>
+                <label className="block text-xs font-semibold text-stone-700 mb-1">
+                  Tanggal Mulai Berlaku *
+                </label>
+                <input
+                  type="date"
+                  value={editingVoucher.startDate}
+                  onChange={(e) =>
+                    setEditingVoucher({ ...editingVoucher, startDate: e.target.value })
+                  }
+                  className={`w-full px-3 py-2 bg-stone-50 border rounded-xl text-xs font-mono ${
+                    voucherValidation.errors.startDate
+                      ? 'border-rose-400 bg-rose-50/50'
+                      : 'border-stone-200'
+                  }`}
+                  required
+                />
+              </div>
+
+              <div>
+                <label className="block text-xs font-semibold text-stone-700 mb-1">
+                  Tanggal Kadaluarsa *
+                </label>
+                <input
+                  type="date"
+                  value={editingVoucher.expiryDate}
+                  onChange={(e) =>
+                    setEditingVoucher({ ...editingVoucher, expiryDate: e.target.value })
+                  }
+                  className={`w-full px-3 py-2 bg-stone-50 border rounded-xl text-xs font-mono ${
+                    voucherValidation.errors.expiryDate
+                      ? 'border-rose-400 bg-rose-50/50'
+                      : 'border-stone-200'
+                  }`}
+                  required
+                />
+                {voucherValidation.errors.expiryDate && (
+                  <p className="text-[10px] text-rose-600 font-medium mt-1">
+                    {voucherValidation.errors.expiryDate}
+                  </p>
+                )}
+              </div>
+            </div>
+
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+              <div>
+                <label className="block text-xs font-semibold text-stone-700 mb-1">
+                  Total Kuota Penggunaan *
+                </label>
+                <input
+                  type="number"
+                  min={1}
+                  value={editingVoucher.usageLimit}
+                  onChange={(e) =>
+                    setEditingVoucher({
+                      ...editingVoucher,
+                      usageLimit: parseInt(e.target.value) || 0,
+                    })
+                  }
+                  className={`w-full px-3 py-2 bg-stone-50 border rounded-xl text-xs font-mono ${
+                    voucherValidation.errors.usageLimit
+                      ? 'border-rose-400 bg-rose-50/50'
+                      : 'border-stone-200'
+                  }`}
+                />
+                {voucherValidation.errors.usageLimit && (
+                  <p className="text-[10px] text-rose-600 font-medium mt-1">
+                    {voucherValidation.errors.usageLimit}
+                  </p>
+                )}
+              </div>
+
+              <div>
+                <label className="block text-xs font-semibold text-stone-700 mb-1">
+                  Batas per Member *
+                </label>
+                <input
+                  type="number"
+                  min={1}
+                  value={editingVoucher.perMemberLimit}
+                  onChange={(e) =>
+                    setEditingVoucher({
+                      ...editingVoucher,
+                      perMemberLimit: parseInt(e.target.value) || 0,
+                    })
+                  }
+                  className={`w-full px-3 py-2 bg-stone-50 border rounded-xl text-xs font-mono ${
+                    voucherValidation.errors.perMemberLimit
+                      ? 'border-rose-400 bg-rose-50/50'
+                      : 'border-stone-200'
+                  }`}
+                />
+                {voucherValidation.errors.perMemberLimit && (
+                  <p className="text-[10px] text-rose-600 font-medium mt-1">
+                    {voucherValidation.errors.perMemberLimit}
+                  </p>
+                )}
+              </div>
+
+              <div>
+                <label className="block text-xs font-semibold text-stone-700 mb-1">
+                  Status Voucher
+                </label>
+                <select
+                  value={editingVoucher.status}
+                  onChange={(e: any) =>
+                    setEditingVoucher({ ...editingVoucher, status: e.target.value })
+                  }
+                  className="w-full px-3 py-2 bg-stone-50 border border-stone-200 rounded-xl text-xs"
+                >
+                  <option value="active">Aktif (Dapat Digunakan)</option>
+                  <option value="inactive">Nonaktif</option>
+                  <option value="expired">Kadaluarsa</option>
+                </select>
+              </div>
+            </div>
+
+            {/* Applicable Tiers Multi-select */}
+            <div>
+              <label className="block text-xs font-semibold text-stone-700 mb-1.5">
+                Target Tier Keanggotaan Berhak *
+              </label>
+              <div className="flex flex-wrap gap-2">
+                {tiers.map((tier) => {
+                  const isChecked = editingVoucher.applicableTierIds?.includes(tier.id);
+                  return (
+                    <button
+                      type="button"
+                      key={tier.id}
+                      onClick={() => {
+                        const current = editingVoucher.applicableTierIds || [];
+                        const updated = isChecked
+                          ? current.filter((id) => id !== tier.id)
+                          : [...current, tier.id];
+                        setEditingVoucher({
+                          ...editingVoucher,
+                          applicableTierIds: updated,
+                        });
+                      }}
+                      className={`px-3 py-1.5 rounded-xl text-xs font-semibold border flex items-center gap-1.5 transition-all cursor-pointer ${
+                        isChecked
+                          ? 'bg-emerald-800 text-white border-emerald-900 shadow-2xs'
+                          : 'bg-stone-50 text-stone-600 border-stone-200 hover:bg-stone-100'
+                      }`}
+                    >
+                      <span
+                        className="w-2 h-2 rounded-full"
+                        style={{ backgroundColor: tier.colorHex }}
+                      />
+                      <span>{tier.name}</span>
+                      {isChecked && <Check className="w-3.5 h-3.5" />}
+                    </button>
+                  );
+                })}
+              </div>
+              {voucherValidation.errors.applicableTierIds && (
+                <p className="text-[10px] text-rose-600 font-medium mt-1">
+                  {voucherValidation.errors.applicableTierIds}
+                </p>
+              )}
+            </div>
+
+            <div className="pt-4 flex items-center justify-between gap-3 border-t border-stone-200">
+              <div className="text-[11px] text-stone-500 flex items-center gap-1">
+                <ShieldCheck className="w-4 h-4 text-emerald-700" />
+                <span>Validasi Aturan & Kuota Realtime Aktif</span>
+              </div>
+
+              <div className="flex items-center gap-2">
+                <button
+                  type="button"
+                  onClick={() => setEditingVoucher(null)}
+                  className="px-4 py-2 text-xs font-semibold text-stone-600 hover:bg-stone-100 rounded-xl cursor-pointer"
+                >
+                  Batal
+                </button>
+                <button
+                  type="submit"
+                  disabled={!voucherValidation.isValid}
+                  className={`px-5 py-2 text-xs font-semibold rounded-xl text-white transition-colors cursor-pointer flex items-center gap-1.5 ${
+                    voucherValidation.isValid
+                      ? 'bg-emerald-800 hover:bg-emerald-900 shadow-xs'
+                      : 'bg-stone-400 cursor-not-allowed opacity-70'
+                  }`}
+                >
+                  <CheckCircle2 className="w-4 h-4" />
+                  <span>Simpan Voucher</span>
+                </button>
+              </div>
             </div>
           </form>
+        </Modal>
+      )}
+
+      {/* Voucher Rule Validator & Simulator Modal */}
+      {isSimulatorOpen && (
+        <Modal
+          isOpen={true}
+          onClose={() => setIsSimulatorOpen(false)}
+          title="Simulator & Validasi Aturan Voucher"
+          maxWidth="2xl"
+        >
+          <div className="space-y-5">
+            <div className="p-3 bg-emerald-50/80 border border-emerald-200 rounded-xl text-xs text-emerald-900 flex items-start gap-2.5">
+              <Sparkles className="w-5 h-5 text-emerald-700 shrink-0 mt-0.5" />
+              <div>
+                <strong className="block font-bold">Uji Validitas Aturan Kupon Secara Real-time</strong>
+                <span>
+                  Alat diagnostik untuk menguji apakah kupon tertentu dapat diterapkan pada transaksi tamu berdasarkan syarat tier, tanggal, outlet, minimal spending, dan kuota.
+                </span>
+              </div>
+            </div>
+
+            {/* Parameter Inputs Grid */}
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4 bg-stone-50 p-4 rounded-2xl border border-stone-200">
+              <div>
+                <label className="block text-xs font-semibold text-stone-700 mb-1">
+                  Pilih Kupon Voucher:
+                </label>
+                <select
+                  value={simCode}
+                  onChange={(e) => setSimCode(e.target.value)}
+                  className="w-full px-3 py-2 bg-white border border-stone-300 rounded-xl text-xs font-mono font-bold"
+                >
+                  {vouchers.map((v) => (
+                    <option key={v.id} value={v.code}>
+                      {v.code} - {v.title} ({v.type === 'percent' ? `${v.discountValue}%` : formatIDR(v.discountValue)})
+                    </option>
+                  ))}
+                </select>
+              </div>
+
+              <div>
+                <label className="block text-xs font-semibold text-stone-700 mb-1">
+                  Tier Keanggotaan Member Tamu:
+                </label>
+                <select
+                  value={simTierId}
+                  onChange={(e) => setSimTierId(e.target.value)}
+                  className="w-full px-3 py-2 bg-white border border-stone-300 rounded-xl text-xs font-semibold"
+                >
+                  {tiers.map((t) => (
+                    <option key={t.id} value={t.id}>
+                      {t.name} (Level {t.level})
+                    </option>
+                  ))}
+                </select>
+              </div>
+
+              <div>
+                <label className="block text-xs font-semibold text-stone-700 mb-1">
+                  Nominal Transaksi (Rp):
+                </label>
+                <input
+                  type="number"
+                  step={50000}
+                  value={simAmount}
+                  onChange={(e) => setSimAmount(parseInt(e.target.value) || 0)}
+                  className="w-full px-3 py-2 bg-white border border-stone-300 rounded-xl text-xs font-mono font-bold"
+                />
+              </div>
+
+              <div>
+                <label className="block text-xs font-semibold text-stone-700 mb-1">
+                  Tanggal Simulasi Transaksi:
+                </label>
+                <input
+                  type="date"
+                  value={simDate}
+                  onChange={(e) => setSimDate(e.target.value)}
+                  className="w-full px-3 py-2 bg-white border border-stone-300 rounded-xl text-xs font-mono"
+                />
+              </div>
+
+              <div>
+                <label className="block text-xs font-semibold text-stone-700 mb-1">
+                  Outlet / Lokasi:
+                </label>
+                <select
+                  value={simOutlet}
+                  onChange={(e) => setSimOutlet(e.target.value)}
+                  className="w-full px-3 py-2 bg-white border border-stone-300 rounded-xl text-xs"
+                >
+                  <option value="Front Desk">Front Desk (Kamar / Menginap)</option>
+                  <option value="Restaurant & Bar">Restoran Teratai Garden</option>
+                  <option value="Spa & Wellness">Spa & Wellness</option>
+                  <option value="Poolside Bar">Poolside Bar</option>
+                </select>
+              </div>
+
+              <div>
+                <label className="block text-xs font-semibold text-stone-700 mb-1">
+                  Riwayat Pemakaian Member Ini:
+                </label>
+                <div className="flex items-center gap-2">
+                  <input
+                    type="number"
+                    min={0}
+                    value={simMemberUsage}
+                    onChange={(e) => setSimMemberUsage(parseInt(e.target.value) || 0)}
+                    className="w-full px-3 py-2 bg-white border border-stone-300 rounded-xl text-xs font-mono"
+                  />
+                  <span className="text-xs text-stone-500 whitespace-nowrap">kali</span>
+                </div>
+              </div>
+            </div>
+
+            {/* Evaluation Results Display */}
+            {simEvaluationResult && simSelectedVoucher ? (
+              <div className="space-y-4">
+                {/* Status Result Header Box */}
+                <div
+                  className={`p-4 rounded-2xl border flex items-center justify-between ${
+                    simEvaluationResult.isApplicable
+                      ? 'bg-emerald-50 border-emerald-300 text-emerald-950'
+                      : 'bg-rose-50 border-rose-300 text-rose-950'
+                  }`}
+                >
+                  <div className="flex items-center gap-3">
+                    <div
+                      className={`w-10 h-10 rounded-xl flex items-center justify-center font-bold text-white shrink-0 ${
+                        simEvaluationResult.isApplicable ? 'bg-emerald-700' : 'bg-rose-600'
+                      }`}
+                    >
+                      {simEvaluationResult.isApplicable ? (
+                        <Check className="w-6 h-6" />
+                      ) : (
+                        <X className="w-6 h-6" />
+                      )}
+                    </div>
+                    <div>
+                      <div className="font-bold text-sm">
+                        {simEvaluationResult.isApplicable
+                          ? 'VOUCHER VALID & DAPAT DIGUNAKAN'
+                          : 'VOUCHER TIDAK DAPAT DITERAPKAN'}
+                      </div>
+                      <p className="text-xs mt-0.5 opacity-90">
+                        {simEvaluationResult.message}
+                      </p>
+                    </div>
+                  </div>
+
+                  {simEvaluationResult.isApplicable && (
+                    <div className="text-right">
+                      <div className="text-[10px] uppercase font-semibold text-emerald-800">
+                        Potongan Diskon
+                      </div>
+                      <div className="font-mono text-lg font-bold text-emerald-800">
+                        {formatIDR(simEvaluationResult.calculatedDiscount)}
+                      </div>
+                    </div>
+                  )}
+                </div>
+
+                {/* 6 Individual Rule Checks Grid */}
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5 text-xs">
+                  {/* Status Check */}
+                  <div className={`p-3 rounded-xl border flex items-start gap-2.5 ${
+                    simEvaluationResult.checks.statusCheck.passed
+                      ? 'bg-white border-emerald-200'
+                      : 'bg-rose-50/70 border-rose-200'
+                  }`}>
+                    {simEvaluationResult.checks.statusCheck.passed ? (
+                      <CheckCircle2 className="w-4 h-4 text-emerald-600 shrink-0 mt-0.5" />
+                    ) : (
+                      <AlertCircle className="w-4 h-4 text-rose-600 shrink-0 mt-0.5" />
+                    )}
+                    <div>
+                      <span className="font-bold text-stone-800 block">1. Status Kupon</span>
+                      <span className="text-[11px] text-stone-600">
+                        {simEvaluationResult.checks.statusCheck.message}
+                      </span>
+                    </div>
+                  </div>
+
+                  {/* Date Check */}
+                  <div className={`p-3 rounded-xl border flex items-start gap-2.5 ${
+                    simEvaluationResult.checks.dateCheck.passed
+                      ? 'bg-white border-emerald-200'
+                      : 'bg-rose-50/70 border-rose-200'
+                  }`}>
+                    {simEvaluationResult.checks.dateCheck.passed ? (
+                      <CheckCircle2 className="w-4 h-4 text-emerald-600 shrink-0 mt-0.5" />
+                    ) : (
+                      <AlertCircle className="w-4 h-4 text-rose-600 shrink-0 mt-0.5" />
+                    )}
+                    <div>
+                      <span className="font-bold text-stone-800 block">2. Masa Berlaku</span>
+                      <span className="text-[11px] text-stone-600">
+                        {simEvaluationResult.checks.dateCheck.message}
+                      </span>
+                    </div>
+                  </div>
+
+                  {/* Tier Check */}
+                  <div className={`p-3 rounded-xl border flex items-start gap-2.5 ${
+                    simEvaluationResult.checks.tierCheck.passed
+                      ? 'bg-white border-emerald-200'
+                      : 'bg-rose-50/70 border-rose-200'
+                  }`}>
+                    {simEvaluationResult.checks.tierCheck.passed ? (
+                      <CheckCircle2 className="w-4 h-4 text-emerald-600 shrink-0 mt-0.5" />
+                    ) : (
+                      <AlertCircle className="w-4 h-4 text-rose-600 shrink-0 mt-0.5" />
+                    )}
+                    <div>
+                      <span className="font-bold text-stone-800 block">3. Hak Tier Member</span>
+                      <span className="text-[11px] text-stone-600">
+                        {simEvaluationResult.checks.tierCheck.message}
+                      </span>
+                    </div>
+                  </div>
+
+                  {/* Min Tx Check */}
+                  <div className={`p-3 rounded-xl border flex items-start gap-2.5 ${
+                    simEvaluationResult.checks.minTransactionCheck.passed
+                      ? 'bg-white border-emerald-200'
+                      : 'bg-rose-50/70 border-rose-200'
+                  }`}>
+                    {simEvaluationResult.checks.minTransactionCheck.passed ? (
+                      <CheckCircle2 className="w-4 h-4 text-emerald-600 shrink-0 mt-0.5" />
+                    ) : (
+                      <AlertCircle className="w-4 h-4 text-rose-600 shrink-0 mt-0.5" />
+                    )}
+                    <div>
+                      <span className="font-bold text-stone-800 block">4. Minimum Transaksi</span>
+                      <span className="text-[11px] text-stone-600">
+                        {simEvaluationResult.checks.minTransactionCheck.message}
+                      </span>
+                    </div>
+                  </div>
+
+                  {/* Usage Quota Check */}
+                  <div className={`p-3 rounded-xl border flex items-start gap-2.5 ${
+                    simEvaluationResult.checks.usageLimitCheck.passed
+                      ? 'bg-white border-emerald-200'
+                      : 'bg-rose-50/70 border-rose-200'
+                  }`}>
+                    {simEvaluationResult.checks.usageLimitCheck.passed ? (
+                      <CheckCircle2 className="w-4 h-4 text-emerald-600 shrink-0 mt-0.5" />
+                    ) : (
+                      <AlertCircle className="w-4 h-4 text-rose-600 shrink-0 mt-0.5" />
+                    )}
+                    <div>
+                      <span className="font-bold text-stone-800 block">5. Kuota Global Hotel</span>
+                      <span className="text-[11px] text-stone-600">
+                        {simEvaluationResult.checks.usageLimitCheck.message}
+                      </span>
+                    </div>
+                  </div>
+
+                  {/* Per Member Limit Check */}
+                  <div className={`p-3 rounded-xl border flex items-start gap-2.5 ${
+                    simEvaluationResult.checks.perMemberLimitCheck.passed
+                      ? 'bg-white border-emerald-200'
+                      : 'bg-rose-50/70 border-rose-200'
+                  }`}>
+                    {simEvaluationResult.checks.perMemberLimitCheck.passed ? (
+                      <CheckCircle2 className="w-4 h-4 text-emerald-600 shrink-0 mt-0.5" />
+                    ) : (
+                      <AlertCircle className="w-4 h-4 text-rose-600 shrink-0 mt-0.5" />
+                    )}
+                    <div>
+                      <span className="font-bold text-stone-800 block">6. Batas per Member</span>
+                      <span className="text-[11px] text-stone-600">
+                        {simEvaluationResult.checks.perMemberLimitCheck.message}
+                      </span>
+                    </div>
+                  </div>
+                </div>
+
+                {/* Calculation breakdown summary */}
+                <div className="p-3.5 bg-stone-900 text-stone-100 rounded-xl font-mono text-xs flex flex-wrap items-center justify-between gap-3">
+                  <div>
+                    <span className="text-stone-400 block text-[10px]">Nilai Transaksi Awal:</span>
+                    <span className="font-bold">{formatIDR(simAmount)}</span>
+                  </div>
+                  <div>
+                    <span className="text-stone-400 block text-[10px]">Potongan Voucher:</span>
+                    <span className="font-bold text-emerald-400">
+                      -{formatIDR(simEvaluationResult.calculatedDiscount)}
+                    </span>
+                  </div>
+                  <div>
+                    <span className="text-stone-400 block text-[10px]">Total Bayar Bersih:</span>
+                    <span className="font-bold text-amber-400 text-sm">
+                      {formatIDR(Math.max(0, simAmount - simEvaluationResult.calculatedDiscount))}
+                    </span>
+                  </div>
+                </div>
+              </div>
+            ) : (
+              <div className="p-6 text-center text-stone-500 text-xs bg-stone-50 rounded-xl border border-dashed border-stone-300">
+                Pilih atau masukkan kode voucher yang ingin disimulasikan.
+              </div>
+            )}
+
+            <div className="pt-3 border-t border-stone-200 flex justify-end">
+              <button
+                type="button"
+                onClick={() => setIsSimulatorOpen(false)}
+                className="px-4 py-2 bg-stone-900 hover:bg-stone-800 text-white rounded-xl text-xs font-semibold"
+              >
+                Tutup Simulator
+              </button>
+            </div>
+          </div>
         </Modal>
       )}
 

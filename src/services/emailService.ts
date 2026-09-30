@@ -337,11 +337,19 @@ export async function sendWelcomeEmail(
   };
 
   try {
-    const { response, parsed } = await apiFetch('/api/email/send', {
+    let result = await apiFetch('/api/email/welcome', {
       method: 'POST',
       body: JSON.stringify(payload),
     });
 
+    if (!result.response.ok) {
+      result = await apiFetch('/api/email/send', {
+        method: 'POST',
+        body: JSON.stringify(payload),
+      });
+    }
+
+    const { response, parsed } = result;
     const data = parsed.isJson ? parsed.data : {};
 
     return {

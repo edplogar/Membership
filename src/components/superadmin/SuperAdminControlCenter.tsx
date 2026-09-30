@@ -45,6 +45,7 @@ import {
   normalizeIndonesianPhone,
 } from '../../services/pingWhatsAppService';
 import { QRCodeView } from '../common/QRCodeView';
+import { DashboardWidget } from '../admin/DashboardWidget';
 
 interface SuperAdminControlCenterProps {
   onNavigate: (tab: string) => void;
@@ -942,6 +943,13 @@ export const SuperAdminControlCenter: React.FC<SuperAdminControlCenterProps> = (
           </div>
         </div>
       </div>
+
+      {/* Daily Active Members & New Sign-ups Chart Widget */}
+      <DashboardWidget
+        title="Tren Aktivitas & Pertumbuhan Member (Super Admin)"
+        subtitle="Analisis tren harian member aktif dan registrasi member baru di Lombok Garden Hotel"
+        defaultDays={14}
+      />
 
       {/* Main Action Grid */}
       <div className="space-y-4 pt-2">

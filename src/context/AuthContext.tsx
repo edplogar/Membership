@@ -179,7 +179,11 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         u.email.toLowerCase().trim() === cleanId ||
         (u.username && u.username.toLowerCase().trim() === cleanId) ||
         (cleanId === 'superadmin' && u.role === 'SUPER_ADMIN') ||
-        (cleanId === 'admin' && u.role === 'ADMIN')
+        (cleanId === 'admin' && u.role === 'ADMIN') ||
+        (cleanId === 'operator_fo' && (u.role === 'OPERATOR_FO' || u.roleId === 'role_operator_fo')) ||
+        (cleanId === 'operator_fb' && (u.role === 'OPERATOR_FB' || u.roleId === 'role_operator_fb')) ||
+        (cleanId === 'fo' && u.role === 'OPERATOR_FO') ||
+        (cleanId === 'fb' && u.role === 'OPERATOR_FB')
     );
 
     if (foundUser) {
@@ -394,6 +398,14 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     }
     if (targetIdOrRole === 'ADMIN') {
       setCurrentUserId('usr_admin');
+      return;
+    }
+    if (targetIdOrRole === 'OPERATOR_FO') {
+      setCurrentUserId('usr_operator_fo');
+      return;
+    }
+    if (targetIdOrRole === 'OPERATOR_FB') {
+      setCurrentUserId('usr_operator_fb');
       return;
     }
     if (targetIdOrRole === 'MEMBER') {

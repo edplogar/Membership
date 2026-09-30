@@ -103,6 +103,19 @@ import {
 } from '../services/dbSyncService';
 import { useAuth } from './AuthContext';
 import { useToast } from './ToastContext';
+import {
+  validateVoucherCreation,
+  validateVoucherRule,
+  VoucherValidationResult,
+  VoucherRuleEvaluationParams,
+  VoucherRuleEvaluationResult,
+} from '../services/voucherValidationService';
+
+export type {
+  VoucherValidationResult,
+  VoucherRuleEvaluationParams,
+  VoucherRuleEvaluationResult,
+};
 
 export interface VerifyVoucherResult {
   isValid: boolean;
@@ -198,6 +211,8 @@ interface AppContextValue {
 
   saveVoucher: (voucher: Voucher) => void;
   deleteVoucher: (id: string) => void;
+  validateVoucherCreationData: (voucher: Partial<Voucher>, editingId?: string) => VoucherValidationResult;
+  validateVoucherRuleEvaluation: (voucher: Voucher, params: VoucherRuleEvaluationParams) => VoucherRuleEvaluationResult;
 
   savePromotion: (promo: PromotionCampaign) => void;
   deletePromotion: (id: string) => void;
@@ -556,10 +571,13 @@ export function AppProvider({ children }: { children: ReactNode }) {
     setNotifications((prev) => [welcomeNotif, ...prev]);
 
     // Trigger Welcome Email to member's registered email address
-    if (emailConfig.autoSendWelcomeEmail && newMember.email) {
+    if (emailConfig.autoSendWelcomeEmail !== false && newMember.email) {
       const currentTier = tiers.find((t) => t.id === newMember.tierId) || tiers[0];
       sendWelcomeEmail(newMember, currentTier, emailConfig)
-        .then((log) => addEmailLog(log))
+        .then((log) => {
+          addEmailLog(log);
+          showToast(`Email sambutan & kartu digital dikirim ke ${newMember.email}`, 'info');
+        })
         .catch(() => {});
     }
 
@@ -1484,7 +1502,26 @@ export function AppProvider({ children }: { children: ReactNode }) {
   };
 
   // Voucher Management
+  const validateVoucherCreationData = (voucher: Partial<Voucher>, editingId?: string): VoucherValidationResult => {
+    return validateVoucherCreation(voucher, vouchers, editingId);
+  };
+
+  const validateVoucherRuleEvaluation = (
+    voucher: Voucher,
+    params: VoucherRuleEvaluationParams
+  ): VoucherRuleEvaluationResult => {
+    return validateVoucherRule(voucher, params);
+  };
+
   const saveVoucher = (voucher: Voucher) => {
+    // Validate voucher before saving
+    const validation = validateVoucherCreation(voucher, vouchers, voucher.id);
+    if (!validation.isValid) {
+      const firstError = Object.values(validation.errors)[0] || 'Voucher tidak valid.';
+      showToast(`Gagal menyimpan: ${firstError}`, 'error');
+      return;
+    }
+
     setVouchers((prev) => {
       const exists = prev.some((v) => v.id === voucher.id);
       return exists ? prev.map((v) => (v.id === voucher.id ? voucher : v)) : [...prev, voucher];
@@ -1492,7 +1529,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
     try {
       setDoc(doc(db, 'vouchers', voucher.id), voucher).catch(() => {});
     } catch {}
-    showToast(`Voucher "${voucher.title}" berhasil disimpan ke database.`, 'success');
+    showToast(`Voucher "${voucher.title}" (${voucher.code}) berhasil disimpan.`, 'success');
   };
 
   const deleteVoucher = (id: string) => {
@@ -1819,6 +1856,8 @@ export function AppProvider({ children }: { children: ReactNode }) {
         deleteReward,
         saveVoucher,
         deleteVoucher,
+        validateVoucherCreationData,
+        validateVoucherRuleEvaluation,
         savePromotion,
         deletePromotion,
         savePointRules,
