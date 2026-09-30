@@ -1187,8 +1187,12 @@ app.post('/api/email/clear-logs', (_req: Request, res: Response) => {
   });
 });
 
-// Vite middleware or Static serving
+// Vite middleware or Static serving (Only when running as dedicated standalone Node server, not on Vercel Serverless)
 async function setupServer() {
+  if (process.env.VERCEL) {
+    return;
+  }
+
   if (!isProd) {
     const { createServer } = await import('vite');
     const vite = await createServer({
@@ -1208,4 +1212,8 @@ async function setupServer() {
   });
 }
 
-setupServer();
+if (!process.env.VERCEL) {
+  setupServer();
+}
+
+export default app;

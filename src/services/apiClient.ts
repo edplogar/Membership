@@ -21,7 +21,7 @@ const STORAGE_VERIFIED_KEY = 'lgh_verified_working_backend';
 let verifiedBackendBaseUrl: string | null = null;
 
 /**
- * Checks if current browser environment is on Cloud Run or localhost
+ * Checks if current browser environment is on Cloud Run, Vercel, localhost, or official domain
  */
 export function isNativeCloudRunHost(): boolean {
   if (typeof window === 'undefined') return true;
@@ -30,7 +30,9 @@ export function isNativeCloudRunHost(): boolean {
     host.includes('run.app') ||
     host === 'localhost' ||
     host === '127.0.0.1' ||
-    host.includes('.webcontainer.io')
+    host.includes('.webcontainer.io') ||
+    host.includes('vercel.app') ||
+    host.includes('lombokgardenhotel.com')
   );
 }
 
@@ -48,13 +50,12 @@ export function getBackendBaseUrl(): string {
     return customOverride.trim().replace(/\/+$/, '');
   }
 
-  // 2. If running on native Cloud Run or localhost, use relative path ('')
+  // 2. If running on Vercel, custom domain, Cloud Run or localhost, use relative path ('')
   if (isNativeCloudRunHost()) {
     return '';
   }
 
-  // 3. If running on custom live subdomain (e.g. member.lombokgardenhotel.com)
-  // Use verified backend or default to the canonical production Cloud Run instance
+  // 3. If running on custom external preview, use verified or saved working backend
   if (verifiedBackendBaseUrl) {
     return verifiedBackendBaseUrl;
   }
@@ -65,8 +66,7 @@ export function getBackendBaseUrl(): string {
     return verifiedBackendBaseUrl;
   }
 
-  // Default canonical Cloud Run backend
-  return CLOUD_RUN_PREVIEW_URL;
+  return '';
 }
 
 /**
