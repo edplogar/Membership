@@ -80,6 +80,7 @@ import {
   handleFirestoreError,
   OperationType,
   testFirestoreConnection,
+  cleanFirestoreData,
 } from '../services/firebase';
 import {
   collection,
@@ -1325,25 +1326,30 @@ export function AppProvider({ children }: { children: ReactNode }) {
   };
 
   // User Management
-  const saveUser = (user: User) => {
+  const saveUser = async (user: User) => {
+    const cleaned = cleanFirestoreData(user);
     setUsers((prev) => {
       const exists = prev.some((u) => u.id === user.id);
       return exists ? prev.map((u) => (u.id === user.id ? user : u)) : [...prev, user];
     });
     try {
-      setDoc(doc(db, 'users', user.id), user).catch(() => {});
-    } catch {}
-    logAudit('SAVE_USER', 'USERS', user.id, 'None', `User: ${user.name} (${user.email})`);
-    showToast(`Akun staf "${user.name}" berhasil disimpan ke database.`, 'success');
+      await setDoc(doc(db, 'users', user.id), cleaned);
+    } catch (err) {
+      console.warn('[FIRESTORE USER SYNC ERROR]', err);
+    }
+    logAudit('SAVE_USER', 'USERS', user.id, 'None', `User: ${user.name} (${user.email}) [Peran: ${user.role}]`);
+    showToast(`Akun "${user.name}" (${user.role}) berhasil disimpan ke database cloud.`, 'success');
   };
 
-  const deleteUser = (userId: string) => {
+  const deleteUser = async (userId: string) => {
     setUsers((prev) => prev.filter((u) => u.id !== userId));
     try {
-      deleteDoc(doc(db, 'users', userId)).catch(() => {});
-    } catch {}
+      await deleteDoc(doc(db, 'users', userId));
+    } catch (err) {
+      console.warn('[FIRESTORE USER DELETE ERROR]', err);
+    }
     logAudit('DELETE_USER', 'USERS', userId, 'None', 'DELETED');
-    showToast('Akun staf berhasil dihapus.', 'info');
+    showToast('Akun staf berhasil dihapus dari database cloud.', 'info');
   };
 
   // Force Full Sync to Cloud

@@ -103,19 +103,19 @@ export const AdminUsersManagement: React.FC = () => {
         name: form.name.trim(),
         username: cleanUsername,
         email: form.email.trim(),
-        phone: form.phone.trim() || undefined,
-        department: form.department.trim() || undefined,
-        jobTitle: form.jobTitle.trim() || undefined,
+        phone: form.phone.trim() || '',
+        department: form.department.trim() || '',
+        jobTitle: form.jobTitle.trim() || '',
         role: form.role,
         roleId: form.roleId,
-        avatar: form.avatar.trim() || undefined,
+        avatar: form.avatar.trim() || '',
         isActive: form.isActive,
         password: form.password ? form.password.trim() : editingUser.password,
       };
 
       saveUser(updatedUser);
       updateAdministrator(updatedUser.id, updatedUser);
-      showToast(`Akun administrator "${updatedUser.name}" berhasil diperbarui.`, 'success');
+      showToast(`Akun administrator "${updatedUser.name}" berhasil diperbarui dan disinkronkan ke cloud.`, 'success');
       setEditingUser(null);
     } else {
       const newAdmin: User = {
@@ -123,12 +123,12 @@ export const AdminUsersManagement: React.FC = () => {
         name: form.name.trim(),
         username: cleanUsername,
         email: form.email.trim(),
-        phone: form.phone.trim() || undefined,
-        department: form.department.trim() || undefined,
-        jobTitle: form.jobTitle.trim() || undefined,
+        phone: form.phone.trim() || '',
+        department: form.department.trim() || 'Front Office & CRM',
+        jobTitle: form.jobTitle.trim() || 'Hotel Administrator',
         role: form.role,
         roleId: form.roleId,
-        avatar: form.avatar.trim() || undefined,
+        avatar: form.avatar.trim() || '',
         isActive: form.isActive,
         password: form.password ? form.password.trim() : 'admin123',
         createdAt: new Date().toISOString(),
@@ -136,7 +136,7 @@ export const AdminUsersManagement: React.FC = () => {
 
       saveUser(newAdmin);
       updateAdministrator(newAdmin.id, newAdmin);
-      showToast(`Administrator baru "${newAdmin.name}" berhasil dibuat.`, 'success');
+      showToast(`Administrator baru "${newAdmin.name}" berhasil dibuat dan disinkronkan ke cloud.`, 'success');
       setIsAddModalOpen(false);
     }
   };

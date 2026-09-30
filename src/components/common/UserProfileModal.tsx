@@ -174,34 +174,38 @@ export const UserProfileModal: React.FC<UserProfileModalProps> = ({
       maxWidth="2xl"
     >
       <div className="space-y-5">
-        {/* Profile Header Card */}
-        <div className="p-4 bg-gradient-to-r from-stone-900 to-emerald-950 rounded-2xl text-white flex items-center justify-between gap-4 border border-stone-800">
-          <div className="flex items-center gap-3.5">
-            <div className="relative">
+        {/* Profile Header Card - Responsive & Non-overlapping */}
+        <div className="p-4 sm:p-5 bg-gradient-to-br from-stone-900 via-stone-900 to-emerald-950 rounded-2xl text-white flex flex-col sm:flex-row sm:items-center justify-between gap-4 border border-stone-800 shadow-sm">
+          <div className="flex items-center gap-3.5 min-w-0">
+            <div className="relative shrink-0">
               {avatar ? (
                 <img
                   src={avatar}
                   alt={name}
-                  className="w-14 h-14 rounded-full object-cover border-2 border-[#00A651] shadow-md"
+                  className="w-14 h-14 sm:w-16 sm:h-16 rounded-2xl object-cover border-2 border-[#00A651] shadow-md"
                 />
               ) : (
-                <div className="w-14 h-14 rounded-full bg-emerald-800 border-2 border-emerald-500 flex items-center justify-center font-bold text-lg text-emerald-100 shadow-md">
-                  {name.charAt(0) || 'U'}
+                <div className="w-14 h-14 sm:w-16 sm:h-16 rounded-2xl bg-gradient-to-br from-emerald-800 to-emerald-950 border-2 border-emerald-500/50 flex items-center justify-center font-bold text-xl text-emerald-100 shadow-md">
+                  {name ? name.charAt(0).toUpperCase() : 'U'}
                 </div>
               )}
-              <span className="absolute bottom-0 right-0 w-3.5 h-3.5 rounded-full bg-[#00A651] ring-2 ring-stone-900" />
+              <span className="absolute -bottom-1 -right-1 w-4 h-4 rounded-full bg-[#00A651] ring-2 ring-stone-900 flex items-center justify-center">
+                <span className="w-1.5 h-1.5 rounded-full bg-white animate-pulse" />
+              </span>
             </div>
 
-            <div>
-              <div className="flex items-center gap-2">
-                <h3 className="font-bold text-sm text-stone-100">{name || 'Nama Pengguna'}</h3>
+            <div className="min-w-0 flex-1">
+              <div className="flex flex-wrap items-center gap-2">
+                <h3 className="font-bold text-sm sm:text-base text-stone-100 truncate max-w-[220px] sm:max-w-[280px]">
+                  {name || 'Nama Pengguna'}
+                </h3>
                 <span
-                  className={`text-[10px] font-bold px-2 py-0.5 rounded-full font-mono uppercase tracking-wider ${
+                  className={`text-[10px] font-bold px-2.5 py-0.5 rounded-full font-mono uppercase tracking-wider shrink-0 ${
                     userRole === 'SUPER_ADMIN'
-                      ? 'bg-amber-400 text-stone-950'
+                      ? 'bg-amber-400 text-stone-950 shadow-xs'
                       : userRole === 'ADMIN'
-                      ? 'bg-emerald-400 text-stone-950'
-                      : 'bg-emerald-700 text-white'
+                      ? 'bg-emerald-400 text-stone-950 shadow-xs'
+                      : 'bg-emerald-600 text-white'
                   }`}
                 >
                   {userRole === 'SUPER_ADMIN'
@@ -211,14 +215,19 @@ export const UserProfileModal: React.FC<UserProfileModalProps> = ({
                     : currentTier?.name || 'Member'}
                 </span>
               </div>
-              <div className="text-xs text-stone-400 font-mono mt-0.5">
-                @{username || 'username'} &bull; {email}
+
+              <div className="text-xs text-stone-400 font-mono mt-1 truncate">
+                <span className="text-emerald-400 font-semibold">@{username || 'username'}</span>
+                <span className="mx-1.5 text-stone-600">&bull;</span>
+                <span className="text-stone-300">{email}</span>
               </div>
+
               {isStaffOrAdmin && (department || jobTitle) && (
-                <div className="text-[11px] text-emerald-300 mt-1 flex items-center gap-1.5">
-                  <Briefcase className="w-3 h-3" />
-                  <span>
-                    {jobTitle} {department ? `&bull; ${department}` : ''}
+                <div className="text-[11px] text-emerald-300 mt-1 flex flex-wrap items-center gap-1.5">
+                  <Briefcase className="w-3 h-3 text-[#00A651] shrink-0" />
+                  <span className="truncate">
+                    {jobTitle}
+                    {department ? ` &bull; ${department}` : ''}
                   </span>
                 </div>
               )}
@@ -226,11 +235,11 @@ export const UserProfileModal: React.FC<UserProfileModalProps> = ({
           </div>
 
           {!isStaffOrAdmin && currentMember && (
-            <div className="hidden sm:block text-right pr-2">
+            <div className="sm:text-right shrink-0 pt-2 sm:pt-0 border-t sm:border-t-0 border-stone-800">
               <div className="text-[10px] text-stone-400 uppercase font-bold tracking-wider">
                 Poin Loyalitas
               </div>
-              <div className="text-lg font-bold font-mono text-amber-400">
+              <div className="text-base sm:text-lg font-bold font-mono text-amber-400">
                 {currentMember.availablePoints.toLocaleString('id-ID')} Poin
               </div>
               <div className="text-[10px] text-stone-400 font-mono">
@@ -240,40 +249,43 @@ export const UserProfileModal: React.FC<UserProfileModalProps> = ({
           )}
         </div>
 
-        {/* Tab Switcher inside Modal */}
-        <div className="flex border-b border-stone-200 gap-6 text-xs font-semibold">
+        {/* Tab Switcher - Segmented Bar */}
+        <div className="p-1 bg-stone-100 rounded-xl flex items-center gap-1 text-xs font-semibold overflow-x-auto no-scrollbar">
           <button
             type="button"
             onClick={() => setActiveTab('profile')}
-            className={`pb-2.5 transition-colors relative cursor-pointer ${
+            className={`flex-1 min-w-[130px] py-2 px-3 rounded-lg transition-all flex items-center justify-center gap-1.5 cursor-pointer ${
               activeTab === 'profile'
-                ? 'text-[#00A651] border-b-2 border-[#00A651]'
-                : 'text-stone-500 hover:text-stone-800'
+                ? 'bg-white text-emerald-800 shadow-xs font-bold'
+                : 'text-stone-600 hover:text-stone-900'
             }`}
           >
-            Data Profil & Kontak
+            <UserIcon className="w-3.5 h-3.5" />
+            <span>Data Profil & Kontak</span>
           </button>
           <button
             type="button"
             onClick={() => setActiveTab('security')}
-            className={`pb-2.5 transition-colors relative cursor-pointer ${
+            className={`flex-1 min-w-[130px] py-2 px-3 rounded-lg transition-all flex items-center justify-center gap-1.5 cursor-pointer ${
               activeTab === 'security'
-                ? 'text-[#00A651] border-b-2 border-[#00A651]'
-                : 'text-stone-500 hover:text-stone-800'
+                ? 'bg-white text-emerald-800 shadow-xs font-bold'
+                : 'text-stone-600 hover:text-stone-900'
             }`}
           >
-            Keamanan & Password
+            <Lock className="w-3.5 h-3.5" />
+            <span>Keamanan & Password</span>
           </button>
           <button
             type="button"
             onClick={() => setActiveTab('info')}
-            className={`pb-2.5 transition-colors relative cursor-pointer ${
+            className={`flex-1 min-w-[130px] py-2 px-3 rounded-lg transition-all flex items-center justify-center gap-1.5 cursor-pointer ${
               activeTab === 'info'
-                ? 'text-[#00A651] border-b-2 border-[#00A651]'
-                : 'text-stone-500 hover:text-stone-800'
+                ? 'bg-white text-emerald-800 shadow-xs font-bold'
+                : 'text-stone-600 hover:text-stone-900'
             }`}
           >
-            Detail Akun & Role
+            <ShieldCheck className="w-3.5 h-3.5" />
+            <span>Detail Akun & Role</span>
           </button>
         </div>
 
@@ -282,19 +294,20 @@ export const UserProfileModal: React.FC<UserProfileModalProps> = ({
           {/* TAB 1: DATA PROFIL & KONTAK */}
           {activeTab === 'profile' && (
             <div className="space-y-4">
+              {/* Row 1: Nama & Username */}
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                 <div>
                   <label className="block text-xs font-semibold text-stone-700 mb-1">
                     Nama Lengkap & Gelar *
                   </label>
                   <div className="relative">
-                    <UserIcon className="w-4 h-4 text-stone-400 absolute left-3 top-1/2 -translate-y-1/2" />
+                    <UserIcon className="w-4 h-4 text-stone-400 absolute left-3 top-1/2 -translate-y-1/2 pointer-events-none" />
                     <input
                       type="text"
                       value={name}
                       onChange={(e) => setName(e.target.value)}
                       placeholder="Nama lengkap"
-                      className="w-full pl-9 pr-3 py-2 bg-stone-50 border border-stone-200 rounded-xl text-xs focus:outline-none focus:ring-2 focus:ring-[#00A651]/20 focus:border-[#00A651]"
+                      className="w-full pl-9.5 pr-3 py-2.5 bg-stone-50 border border-stone-200 rounded-xl text-xs text-stone-900 focus:outline-none focus:ring-2 focus:ring-[#00A651]/20 focus:border-[#00A651] transition-all"
                       required
                     />
                   </div>
@@ -305,7 +318,7 @@ export const UserProfileModal: React.FC<UserProfileModalProps> = ({
                     Username Login * (Email/Username)
                   </label>
                   <div className="relative">
-                    <span className="text-stone-400 font-mono text-xs absolute left-3 top-1/2 -translate-y-1/2">
+                    <span className="text-stone-400 font-mono text-xs absolute left-3 top-1/2 -translate-y-1/2 pointer-events-none font-bold">
                       @
                     </span>
                     <input
@@ -317,29 +330,27 @@ export const UserProfileModal: React.FC<UserProfileModalProps> = ({
                         )
                       }
                       placeholder="username unik"
-                      className="w-full pl-8 pr-3 py-2 bg-stone-50 border border-stone-200 rounded-xl text-xs font-mono focus:outline-none focus:ring-2 focus:ring-[#00A651]/20 focus:border-[#00A651]"
+                      className="w-full pl-8.5 pr-3 py-2.5 bg-stone-50 border border-stone-200 rounded-xl text-xs font-mono text-stone-900 focus:outline-none focus:ring-2 focus:ring-[#00A651]/20 focus:border-[#00A651] transition-all"
                       required
                     />
                   </div>
-                  <p className="text-[10px] text-stone-500 mt-1">
-                    Bisa digunakan untuk login simpel tanpa mengetik email panjang.
-                  </p>
                 </div>
               </div>
 
+              {/* Row 2: Email & Nomor Telepon */}
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                 <div>
                   <label className="block text-xs font-semibold text-stone-700 mb-1">
                     Alamat Email *
                   </label>
                   <div className="relative">
-                    <Mail className="w-4 h-4 text-stone-400 absolute left-3 top-1/2 -translate-y-1/2" />
+                    <Mail className="w-4 h-4 text-stone-400 absolute left-3 top-1/2 -translate-y-1/2 pointer-events-none" />
                     <input
                       type="email"
                       value={email}
                       onChange={(e) => setEmail(e.target.value)}
                       placeholder="nama@email.com"
-                      className="w-full pl-9 pr-3 py-2 bg-stone-50 border border-stone-200 rounded-xl text-xs focus:outline-none focus:ring-2 focus:ring-[#00A651]/20 focus:border-[#00A651]"
+                      className="w-full pl-9.5 pr-3 py-2.5 bg-stone-50 border border-stone-200 rounded-xl text-xs text-stone-900 focus:outline-none focus:ring-2 focus:ring-[#00A651]/20 focus:border-[#00A651] transition-all"
                       required
                     />
                   </div>
@@ -350,13 +361,13 @@ export const UserProfileModal: React.FC<UserProfileModalProps> = ({
                     Nomor Telepon / WhatsApp
                   </label>
                   <div className="relative">
-                    <Phone className="w-4 h-4 text-stone-400 absolute left-3 top-1/2 -translate-y-1/2" />
+                    <Phone className="w-4 h-4 text-stone-400 absolute left-3 top-1/2 -translate-y-1/2 pointer-events-none" />
                     <input
                       type="tel"
                       value={phone}
                       onChange={(e) => setPhone(e.target.value)}
                       placeholder="+62 812xxxx"
-                      className="w-full pl-9 pr-3 py-2 bg-stone-50 border border-stone-200 rounded-xl text-xs font-mono focus:outline-none focus:ring-2 focus:ring-[#00A651]/20 focus:border-[#00A651]"
+                      className="w-full pl-9.5 pr-3 py-2.5 bg-stone-50 border border-stone-200 rounded-xl text-xs font-mono text-stone-900 focus:outline-none focus:ring-2 focus:ring-[#00A651]/20 focus:border-[#00A651] transition-all"
                     />
                   </div>
                 </div>
@@ -364,36 +375,41 @@ export const UserProfileModal: React.FC<UserProfileModalProps> = ({
 
               {/* Staff-Specific Fields */}
               {isStaffOrAdmin && (
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 p-3.5 bg-stone-50 rounded-xl border border-stone-200">
-                  <div>
-                    <label className="block text-xs font-semibold text-stone-700 mb-1">
-                      Departemen Hotel
-                    </label>
-                    <div className="relative">
-                      <Building2 className="w-4 h-4 text-stone-400 absolute left-3 top-1/2 -translate-y-1/2" />
-                      <input
-                        type="text"
-                        value={department}
-                        onChange={(e) => setDepartment(e.target.value)}
-                        placeholder="Contoh: Front Office, F&B, IT"
-                        className="w-full pl-9 pr-3 py-2 bg-white border border-stone-200 rounded-xl text-xs focus:outline-none focus:ring-2 focus:ring-[#00A651]/20 focus:border-[#00A651]"
-                      />
-                    </div>
+                <div className="pt-2">
+                  <div className="text-[11px] font-bold uppercase tracking-wider text-stone-400 mb-2.5">
+                    Informasi Penugasan Hotel
                   </div>
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                    <div>
+                      <label className="block text-xs font-semibold text-stone-700 mb-1">
+                        Departemen Hotel
+                      </label>
+                      <div className="relative">
+                        <Building2 className="w-4 h-4 text-stone-400 absolute left-3 top-1/2 -translate-y-1/2 pointer-events-none" />
+                        <input
+                          type="text"
+                          value={department}
+                          onChange={(e) => setDepartment(e.target.value)}
+                          placeholder="Contoh: Front Office, F&B, IT"
+                          className="w-full pl-9.5 pr-3 py-2.5 bg-stone-50 border border-stone-200 rounded-xl text-xs text-stone-900 focus:outline-none focus:ring-2 focus:ring-[#00A651]/20 focus:border-[#00A651] transition-all"
+                        />
+                      </div>
+                    </div>
 
-                  <div>
-                    <label className="block text-xs font-semibold text-stone-700 mb-1">
-                      Jabatan / Posisi
-                    </label>
-                    <div className="relative">
-                      <Briefcase className="w-4 h-4 text-stone-400 absolute left-3 top-1/2 -translate-y-1/2" />
-                      <input
-                        type="text"
-                        value={jobTitle}
-                        onChange={(e) => setJobTitle(e.target.value)}
-                        placeholder="Contoh: Front Desk Manager, IT Supervisor"
-                        className="w-full pl-9 pr-3 py-2 bg-white border border-stone-200 rounded-xl text-xs focus:outline-none focus:ring-2 focus:ring-[#00A651]/20 focus:border-[#00A651]"
-                      />
+                    <div>
+                      <label className="block text-xs font-semibold text-stone-700 mb-1">
+                        Jabatan / Posisi
+                      </label>
+                      <div className="relative">
+                        <Briefcase className="w-4 h-4 text-stone-400 absolute left-3 top-1/2 -translate-y-1/2 pointer-events-none" />
+                        <input
+                          type="text"
+                          value={jobTitle}
+                          onChange={(e) => setJobTitle(e.target.value)}
+                          placeholder="Contoh: Front Desk Manager, IT Supervisor"
+                          className="w-full pl-9.5 pr-3 py-2.5 bg-stone-50 border border-stone-200 rounded-xl text-xs text-stone-900 focus:outline-none focus:ring-2 focus:ring-[#00A651]/20 focus:border-[#00A651] transition-all"
+                        />
+                      </div>
                     </div>
                   </div>
                 </div>
@@ -401,18 +417,24 @@ export const UserProfileModal: React.FC<UserProfileModalProps> = ({
 
               {/* Member-Specific Fields */}
               {!isStaffOrAdmin && (
-                <div className="space-y-4 p-3.5 bg-stone-50 rounded-xl border border-stone-200">
+                <div className="pt-2 space-y-4">
+                  <div className="text-[11px] font-bold uppercase tracking-wider text-stone-400">
+                    Biodata & Domisili Member
+                  </div>
                   <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                     <div>
                       <label className="block text-xs font-semibold text-stone-700 mb-1">
                         Tanggal Lahir
                       </label>
-                      <input
-                        type="date"
-                        value={birthDate}
-                        onChange={(e) => setBirthDate(e.target.value)}
-                        className="w-full px-3 py-2 bg-white border border-stone-200 rounded-xl text-xs focus:outline-none focus:border-[#00A651]"
-                      />
+                      <div className="relative">
+                        <Calendar className="w-4 h-4 text-stone-400 absolute left-3 top-1/2 -translate-y-1/2 pointer-events-none" />
+                        <input
+                          type="date"
+                          value={birthDate}
+                          onChange={(e) => setBirthDate(e.target.value)}
+                          className="w-full pl-9.5 pr-3 py-2.5 bg-stone-50 border border-stone-200 rounded-xl text-xs text-stone-900 focus:outline-none focus:ring-2 focus:ring-[#00A651]/20 focus:border-[#00A651] transition-all"
+                        />
+                      </div>
                     </div>
 
                     <div>
@@ -422,7 +444,7 @@ export const UserProfileModal: React.FC<UserProfileModalProps> = ({
                       <select
                         value={gender}
                         onChange={(e) => setGender(e.target.value as 'L' | 'P')}
-                        className="w-full px-3 py-2 bg-white border border-stone-200 rounded-xl text-xs focus:outline-none focus:border-[#00A651]"
+                        className="w-full px-3 py-2.5 bg-stone-50 border border-stone-200 rounded-xl text-xs text-stone-900 focus:outline-none focus:ring-2 focus:ring-[#00A651]/20 focus:border-[#00A651] transition-all cursor-pointer"
                       >
                         <option value="L">Laki-laki</option>
                         <option value="P">Perempuan</option>
@@ -436,13 +458,16 @@ export const UserProfileModal: React.FC<UserProfileModalProps> = ({
                       <label className="block text-xs font-semibold text-stone-700 mb-1">
                         Alamat Domisili
                       </label>
-                      <input
-                        type="text"
-                        value={address}
-                        onChange={(e) => setAddress(e.target.value)}
-                        placeholder="Alamat lengkap"
-                        className="w-full px-3 py-2 bg-white border border-stone-200 rounded-xl text-xs focus:outline-none focus:border-[#00A651]"
-                      />
+                      <div className="relative">
+                        <MapPin className="w-4 h-4 text-stone-400 absolute left-3 top-1/2 -translate-y-1/2 pointer-events-none" />
+                        <input
+                          type="text"
+                          value={address}
+                          onChange={(e) => setAddress(e.target.value)}
+                          placeholder="Alamat lengkap tempat tinggal"
+                          className="w-full pl-9.5 pr-3 py-2.5 bg-stone-50 border border-stone-200 rounded-xl text-xs text-stone-900 focus:outline-none focus:ring-2 focus:ring-[#00A651]/20 focus:border-[#00A651] transition-all"
+                        />
+                      </div>
                     </div>
 
                     <div>
@@ -454,7 +479,7 @@ export const UserProfileModal: React.FC<UserProfileModalProps> = ({
                         value={city}
                         onChange={(e) => setCity(e.target.value)}
                         placeholder="Contoh: Mataram, Jakarta, Denpasar"
-                        className="w-full px-3 py-2 bg-white border border-stone-200 rounded-xl text-xs focus:outline-none focus:border-[#00A651]"
+                        className="w-full px-3.5 py-2.5 bg-stone-50 border border-stone-200 rounded-xl text-xs text-stone-900 focus:outline-none focus:ring-2 focus:ring-[#00A651]/20 focus:border-[#00A651] transition-all"
                       />
                     </div>
                   </div>
@@ -462,12 +487,12 @@ export const UserProfileModal: React.FC<UserProfileModalProps> = ({
               )}
 
               {/* Photo Avatar via Direct Local Device Upload */}
-              <div className="pt-2">
+              <div className="pt-2 border-t border-stone-100">
                 <DevicePhotoUploader
                   currentPhoto={avatar}
                   onPhotoChange={(newPhoto) => setAvatar(newPhoto)}
                   userName={name || 'User'}
-                  label="Foto Profil Pengguna (Upload Langsung dari Perangkat Lokal)"
+                  label="Foto Profil Akun (Upload dari Komputer / HP Lokal)"
                 />
               </div>
             </div>
@@ -476,49 +501,52 @@ export const UserProfileModal: React.FC<UserProfileModalProps> = ({
           {/* TAB 2: KEAMANAN & PASSWORD */}
           {activeTab === 'security' && (
             <div className="space-y-4">
-              <div className="p-3.5 bg-amber-50 border border-amber-200 rounded-xl text-amber-900 text-xs flex items-start gap-2.5">
+              <div className="p-3.5 bg-amber-50 border border-amber-200/80 rounded-xl text-amber-900 text-xs flex items-start gap-2.5 leading-relaxed">
                 <Lock className="w-4 h-4 text-amber-700 shrink-0 mt-0.5" />
-                <div className="leading-relaxed">
-                  Kosongkan kolom kata sandi jika Anda <strong>tidak ingin mengubah</strong> kata sandi akun saat ini.
+                <div>
+                  <strong>Tips Keamanan:</strong> Kosongkan kolom kata sandi jika Anda <strong>tidak ingin mengubah</strong> kata sandi akun saat ini. Pastikan kata sandi minimal 6 karakter.
                 </div>
               </div>
 
-              <div>
-                <label className="block text-xs font-semibold text-stone-700 mb-1">
-                  Kata Sandi Baru
-                </label>
-                <div className="relative">
-                  <Lock className="w-4 h-4 text-stone-400 absolute left-3 top-1/2 -translate-y-1/2" />
-                  <input
-                    type={showPassword ? 'text' : 'password'}
-                    value={newPassword}
-                    onChange={(e) => setNewPassword(e.target.value)}
-                    placeholder="Minimal 6 karakter"
-                    className="w-full pl-9 pr-10 py-2 bg-stone-50 border border-stone-200 rounded-xl text-xs focus:outline-none focus:border-[#00A651]"
-                  />
-                  <button
-                    type="button"
-                    onClick={() => setShowPassword(!showPassword)}
-                    className="absolute right-3 top-1/2 -translate-y-1/2 text-stone-400 hover:text-stone-600 cursor-pointer"
-                  >
-                    {showPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
-                  </button>
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                <div>
+                  <label className="block text-xs font-semibold text-stone-700 mb-1">
+                    Kata Sandi Baru
+                  </label>
+                  <div className="relative">
+                    <Lock className="w-4 h-4 text-stone-400 absolute left-3 top-1/2 -translate-y-1/2 pointer-events-none" />
+                    <input
+                      type={showPassword ? 'text' : 'password'}
+                      value={newPassword}
+                      onChange={(e) => setNewPassword(e.target.value)}
+                      placeholder="Minimal 6 karakter"
+                      className="w-full pl-9.5 pr-10 py-2.5 bg-stone-50 border border-stone-200 rounded-xl text-xs text-stone-900 focus:outline-none focus:ring-2 focus:ring-[#00A651]/20 focus:border-[#00A651] transition-all"
+                    />
+                    <button
+                      type="button"
+                      onClick={() => setShowPassword(!showPassword)}
+                      className="absolute right-3 top-1/2 -translate-y-1/2 text-stone-400 hover:text-stone-700 cursor-pointer p-1"
+                      title={showPassword ? 'Sembunyikan kata sandi' : 'Tampilkan kata sandi'}
+                    >
+                      {showPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+                    </button>
+                  </div>
                 </div>
-              </div>
 
-              <div>
-                <label className="block text-xs font-semibold text-stone-700 mb-1">
-                  Konfirmasi Kata Sandi Baru
-                </label>
-                <div className="relative">
-                  <Lock className="w-4 h-4 text-stone-400 absolute left-3 top-1/2 -translate-y-1/2" />
-                  <input
-                    type={showPassword ? 'text' : 'password'}
-                    value={confirmPassword}
-                    onChange={(e) => setConfirmPassword(e.target.value)}
-                    placeholder="Ulangi kata sandi baru"
-                    className="w-full pl-9 pr-3 py-2 bg-stone-50 border border-stone-200 rounded-xl text-xs focus:outline-none focus:border-[#00A651]"
-                  />
+                <div>
+                  <label className="block text-xs font-semibold text-stone-700 mb-1">
+                    Konfirmasi Kata Sandi Baru
+                  </label>
+                  <div className="relative">
+                    <Lock className="w-4 h-4 text-stone-400 absolute left-3 top-1/2 -translate-y-1/2 pointer-events-none" />
+                    <input
+                      type={showPassword ? 'text' : 'password'}
+                      value={confirmPassword}
+                      onChange={(e) => setConfirmPassword(e.target.value)}
+                      placeholder="Ulangi kata sandi baru"
+                      className="w-full pl-9.5 pr-3 py-2.5 bg-stone-50 border border-stone-200 rounded-xl text-xs text-stone-900 focus:outline-none focus:ring-2 focus:ring-[#00A651]/20 focus:border-[#00A651] transition-all"
+                    />
+                  </div>
                 </div>
               </div>
             </div>
@@ -527,25 +555,25 @@ export const UserProfileModal: React.FC<UserProfileModalProps> = ({
           {/* TAB 3: DETAIL AKUN & ROLE */}
           {activeTab === 'info' && (
             <div className="space-y-4">
-              <div className="grid grid-cols-2 gap-3 text-xs">
-                <div className="p-3 bg-stone-50 rounded-xl border border-stone-200 space-y-1">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 text-xs">
+                <div className="p-3.5 bg-stone-50 rounded-xl border border-stone-200 space-y-1">
                   <div className="text-[10px] text-stone-400 uppercase font-bold tracking-wider">
                     ID Pengguna
                   </div>
-                  <div className="font-mono font-semibold text-stone-800">{currentUser.id}</div>
+                  <div className="font-mono font-semibold text-stone-900 truncate">{currentUser.id}</div>
                 </div>
 
-                <div className="p-3 bg-stone-50 rounded-xl border border-stone-200 space-y-1">
+                <div className="p-3.5 bg-stone-50 rounded-xl border border-stone-200 space-y-1">
                   <div className="text-[10px] text-stone-400 uppercase font-bold tracking-wider">
                     Status Akun
                   </div>
                   <div className="flex items-center gap-1.5 font-bold text-emerald-700">
-                    <CheckCircle className="w-3.5 h-3.5" />
+                    <CheckCircle className="w-3.5 h-3.5 text-[#00A651]" />
                     <span>Aktif & Terverifikasi</span>
                   </div>
                 </div>
 
-                <div className="p-3 bg-stone-50 rounded-xl border border-stone-200 space-y-1">
+                <div className="p-3.5 bg-stone-50 rounded-xl border border-stone-200 space-y-1">
                   <div className="text-[10px] text-stone-400 uppercase font-bold tracking-wider">
                     Tanggal Terdaftar
                   </div>
@@ -558,7 +586,7 @@ export const UserProfileModal: React.FC<UserProfileModalProps> = ({
                   </div>
                 </div>
 
-                <div className="p-3 bg-stone-50 rounded-xl border border-stone-200 space-y-1">
+                <div className="p-3.5 bg-stone-50 rounded-xl border border-stone-200 space-y-1">
                   <div className="text-[10px] text-stone-400 uppercase font-bold tracking-wider">
                     Terakhir Masuk
                   </div>
@@ -575,22 +603,20 @@ export const UserProfileModal: React.FC<UserProfileModalProps> = ({
                 </div>
               </div>
 
-              <div className="p-4 bg-emerald-50/70 border border-emerald-200 rounded-2xl flex items-center justify-between">
-                <div className="flex items-center gap-3">
-                  <div className="p-2.5 bg-emerald-700 text-white rounded-xl">
-                    <ShieldCheck className="w-5 h-5" />
+              <div className="p-4 bg-emerald-50/80 border border-emerald-200/90 rounded-2xl flex items-start sm:items-center gap-3.5">
+                <div className="p-2.5 bg-emerald-700 text-white rounded-xl shrink-0">
+                  <ShieldCheck className="w-5 h-5" />
+                </div>
+                <div className="min-w-0">
+                  <div className="text-xs font-bold text-emerald-950">
+                    Tingkat Akses: {userRole}
                   </div>
-                  <div>
-                    <div className="text-xs font-bold text-emerald-950">
-                      Tingkat Akses: {userRole}
-                    </div>
-                    <div className="text-[11px] text-emerald-800">
-                      {userRole === 'SUPER_ADMIN'
-                        ? 'Akses penuh ke seluruh konfigurasi sistem, database, audit, dan WhatsApp CRM.'
-                        : userRole === 'ADMIN'
-                        ? 'Akses operasional reservasi, transaksi Front Desk, scanner, dan penukaran poin.'
-                        : 'Akses kartu keanggotaan digital, katalog reward, dan riwayat menginap.'}
-                    </div>
+                  <div className="text-[11px] text-emerald-800 leading-relaxed mt-0.5">
+                    {userRole === 'SUPER_ADMIN'
+                      ? 'Akses penuh ke seluruh konfigurasi sistem, database, audit, dan WhatsApp CRM.'
+                      : userRole === 'ADMIN'
+                      ? 'Akses operasional reservasi, transaksi Front Desk, scanner, dan penukaran poin.'
+                      : 'Akses kartu keanggotaan digital, katalog reward, dan riwayat menginap.'}
                   </div>
                 </div>
               </div>
@@ -602,13 +628,13 @@ export const UserProfileModal: React.FC<UserProfileModalProps> = ({
             <button
               type="button"
               onClick={onClose}
-              className="px-4 py-2 text-xs font-semibold text-stone-600 hover:bg-stone-100 rounded-xl cursor-pointer"
+              className="px-4 py-2 text-xs font-semibold text-stone-600 hover:bg-stone-100 rounded-xl transition-colors cursor-pointer"
             >
               Batal
             </button>
             <button
               type="submit"
-              className="px-5 py-2 text-xs font-bold bg-[#00A651] hover:bg-[#009647] text-white rounded-xl shadow-xs transition-colors cursor-pointer flex items-center gap-1.5"
+              className="px-5 py-2.5 text-xs font-bold bg-[#00A651] hover:bg-[#009647] text-white rounded-xl shadow-xs transition-all cursor-pointer flex items-center gap-1.5"
             >
               <CheckCircle className="w-3.5 h-3.5" />
               <span>Simpan Perubahan Profil</span>

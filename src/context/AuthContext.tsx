@@ -7,6 +7,8 @@ import {
   loadFromStorage,
   saveToStorage,
 } from '../services/storage';
+import { collection, doc, setDoc, onSnapshot } from 'firebase/firestore';
+import { db, cleanFirestoreData } from '../services/firebase';
 
 interface AuthContextValue {
   currentUser: User | null;
@@ -58,7 +60,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [users, setUsers] = useState<User[]>(() =>
     loadFromStorage<User[]>('users', INITIAL_USERS)
   );
-  const [roles] = useState<Role[]>(() =>
+  const [roles, setRoles] = useState<Role[]>(() =>
     loadFromStorage<Role[]>('roles', INITIAL_ROLES)
   );
   const [members, setMembers] = useState<Member[]>(() =>
@@ -87,6 +89,77 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       localStorage.removeItem('lgh_membership_auth_current_user_id');
     }
   }, [currentUserId]);
+
+  // Real-time Firestore Listeners to guarantee instant sync across subdomain and devices
+  useEffect(() => {
+    let unsubUsers: (() => void) | undefined;
+    let unsubMembers: (() => void) | undefined;
+    let unsubRoles: (() => void) | undefined;
+
+    try {
+      unsubUsers = onSnapshot(
+        collection(db, 'users'),
+        (snapshot) => {
+          if (!snapshot.empty) {
+            const list: User[] = [];
+            snapshot.forEach((docSnap) => {
+              const u = docSnap.data() as User;
+              if (u && u.id) list.push(u);
+            });
+            setUsers(list);
+            saveToStorage('users', list);
+          }
+        },
+        (error) => {
+          console.warn('[AUTH FIREBASE] users onSnapshot notice:', error);
+        }
+      );
+
+      unsubMembers = onSnapshot(
+        collection(db, 'members'),
+        (snapshot) => {
+          if (!snapshot.empty) {
+            const list: Member[] = [];
+            snapshot.forEach((docSnap) => {
+              const m = docSnap.data() as Member;
+              if (m && m.id) list.push(m);
+            });
+            setMembers(list);
+            saveToStorage('members', list);
+          }
+        },
+        (error) => {
+          console.warn('[AUTH FIREBASE] members onSnapshot notice:', error);
+        }
+      );
+
+      unsubRoles = onSnapshot(
+        collection(db, 'roles'),
+        (snapshot) => {
+          if (!snapshot.empty) {
+            const list: Role[] = [];
+            snapshot.forEach((docSnap) => {
+              const r = docSnap.data() as Role;
+              if (r && r.id) list.push(r);
+            });
+            setRoles(list);
+            saveToStorage('roles', list);
+          }
+        },
+        (error) => {
+          console.warn('[AUTH FIREBASE] roles onSnapshot notice:', error);
+        }
+      );
+    } catch (e) {
+      console.warn('[AUTH FIREBASE] Setup snapshot listener notice:', e);
+    }
+
+    return () => {
+      if (unsubUsers) unsubUsers();
+      if (unsubMembers) unsubMembers();
+      if (unsubRoles) unsubRoles();
+    };
+  }, []);
 
   const hasPermission = (permission: PermissionCode): boolean => {
     if (!currentUser) return false;
@@ -123,6 +196,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       const updatedList = users.map((u) => (u.id === updatedUser.id ? updatedUser : u));
       setUsers(updatedList);
       saveToStorage('users', updatedList);
+      try {
+        setDoc(doc(db, 'users', foundUser.id), cleanFirestoreData(updatedUser), { merge: true }).catch(() => {});
+      } catch {}
       setCurrentUserId(foundUser.id);
       return true;
     }
@@ -352,11 +428,18 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   const updateCurrentUser = (updates: Partial<User>) => {
     if (!currentUser) return;
+    const updatedUser: User = { ...currentUser, ...updates };
     const updated = users.map((u) =>
-      u.id === currentUser.id ? { ...u, ...updates } : u
+      u.id === currentUser.id ? updatedUser : u
     );
     setUsers(updated);
     saveToStorage('users', updated);
+
+    try {
+      setDoc(doc(db, 'users', currentUser.id), cleanFirestoreData(updatedUser), { merge: true }).catch((err) => {
+        console.warn('[AUTH FIREBASE] Failed to sync current user update:', err);
+      });
+    } catch {}
   };
 
   const updateUserProfile = (updates: {
@@ -387,18 +470,26 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       password: updates.password || currentUser.password,
     };
 
+    const updatedUser: User = { ...currentUser, ...userUpdates };
     const updatedUsers = users.map((u) =>
-      u.id === currentUser.id ? { ...u, ...userUpdates } : u
+      u.id === currentUser.id ? updatedUser : u
     );
     setUsers(updatedUsers);
     saveToStorage('users', updatedUsers);
 
+    try {
+      setDoc(doc(db, 'users', currentUser.id), cleanFirestoreData(updatedUser), { merge: true }).catch((err) => {
+        console.warn('[AUTH FIREBASE] Failed to sync user profile:', err);
+      });
+    } catch {}
+
     // 2. If user is tied to a member account, also update the member table
     if (currentUser.memberId) {
       const memberId = currentUser.memberId;
+      let updatedMember: Member | null = null;
       const updatedMembers = members.map((m) => {
         if (m.id === memberId) {
-          return {
+          updatedMember = {
             ...m,
             fullName: updates.name,
             nickname: updates.name.split(' ')[0],
@@ -412,27 +503,46 @@ export function AuthProvider({ children }: { children: ReactNode }) {
             birthDate: updates.birthDate !== undefined ? updates.birthDate : m.birthDate,
             gender: updates.gender !== undefined ? updates.gender : m.gender,
           };
+          return updatedMember;
         }
         return m;
       });
       setMembers(updatedMembers);
       saveToStorage('members', updatedMembers);
+
+      if (updatedMember) {
+        try {
+          setDoc(doc(db, 'members', memberId), cleanFirestoreData(updatedMember), { merge: true }).catch((err) => {
+            console.warn('[AUTH FIREBASE] Failed to sync member profile:', err);
+          });
+        } catch {}
+      }
     }
   };
 
   const updateAdministrator = (userId: string, updates: Partial<User>) => {
+    let targetUpdated: User | null = null;
     const updatedUsers = users.map((u) => {
       if (u.id === userId) {
-        return {
+        targetUpdated = {
           ...u,
           ...updates,
           username: updates.username ? updates.username.toLowerCase().trim() : u.username,
         };
+        return targetUpdated;
       }
       return u;
     });
     setUsers(updatedUsers);
     saveToStorage('users', updatedUsers);
+
+    if (targetUpdated) {
+      try {
+        setDoc(doc(db, 'users', userId), cleanFirestoreData(targetUpdated), { merge: true }).catch((err) => {
+          console.warn('[AUTH FIREBASE] Failed to sync administrator:', err);
+        });
+      } catch {}
+    }
   };
 
   const refreshMemberData = (updatedMember: Member) => {
@@ -552,6 +662,17 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     if (matched) {
       setUsers(updatedUsers);
       saveToStorage('users', updatedUsers);
+      const matchedUser = updatedUsers.find((u) =>
+        u.email.toLowerCase().trim() === clean ||
+        (u.username && u.username.toLowerCase().trim() === clean) ||
+        (clean === 'superadmin' && u.role === 'SUPER_ADMIN') ||
+        (clean === 'admin' && u.role === 'ADMIN')
+      );
+      if (matchedUser) {
+        try {
+          setDoc(doc(db, 'users', matchedUser.id), cleanFirestoreData(matchedUser), { merge: true }).catch(() => {});
+        } catch {}
+      }
     }
 
     // 2. Update in members
@@ -576,6 +697,16 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       setMembers(updatedMembers);
       saveToStorage('members', updatedMembers);
       matched = true;
+      const matchedMem = updatedMembers.find((m) =>
+        m.email.toLowerCase().trim() === clean ||
+        (m.username && m.username.toLowerCase().trim() === clean) ||
+        m.nickname.toLowerCase().trim() === clean
+      );
+      if (matchedMem) {
+        try {
+          setDoc(doc(db, 'members', matchedMem.id), cleanFirestoreData(matchedMem), { merge: true }).catch(() => {});
+        } catch {}
+      }
     }
 
     return matched;

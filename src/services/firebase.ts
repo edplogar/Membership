@@ -170,3 +170,29 @@ export function handleFirestoreError(
   console.error('Firestore Error:', JSON.stringify(errInfo));
   throw new Error(JSON.stringify(errInfo));
 }
+
+/**
+ * Recursively cleans an object by stripping undefined values
+ * which are rejected by the Firestore SDK.
+ */
+export function cleanFirestoreData<T extends Record<string, any>>(obj: T): T {
+  if (obj === null || typeof obj !== 'object') {
+    return obj;
+  }
+  if (Array.isArray(obj)) {
+    return obj.map((item) =>
+      typeof item === 'object' && item !== null ? cleanFirestoreData(item) : item
+    ) as unknown as T;
+  }
+  const result: any = {};
+  for (const [key, val] of Object.entries(obj)) {
+    if (val !== undefined) {
+      if (val !== null && typeof val === 'object' && !Array.isArray(val) && !(val instanceof Date)) {
+        result[key] = cleanFirestoreData(val);
+      } else {
+        result[key] = val;
+      }
+    }
+  }
+  return result;
+}

@@ -196,6 +196,47 @@
         "status": { "type": "string", "enum": ["active", "upcoming", "ended"] }
       },
       "required": ["id", "title", "status"]
+    },
+    "User": {
+      "title": "User",
+      "description": "Super admin, admin staff, and authenticated member users",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string", "maxLength": 128 },
+        "email": { "type": "string", "maxLength": 256 },
+        "username": { "type": "string", "maxLength": 64 },
+        "name": { "type": "string", "maxLength": 256 },
+        "role": { "type": "string", "enum": ["MEMBER", "ADMIN", "SUPER_ADMIN"] },
+        "roleId": { "type": "string", "maxLength": 64 },
+        "memberId": { "type": "string", "maxLength": 128 },
+        "avatar": { "type": "string", "maxLength": 1024 },
+        "phone": { "type": "string", "maxLength": 64 },
+        "department": { "type": "string", "maxLength": 128 },
+        "jobTitle": { "type": "string", "maxLength": 128 },
+        "password": { "type": "string", "maxLength": 256 },
+        "notes": { "type": "string", "maxLength": 1024 },
+        "isActive": { "type": "boolean" },
+        "createdAt": { "type": "string", "maxLength": 64 },
+        "lastLogin": { "type": "string", "maxLength": 64 }
+      },
+      "required": ["id", "email", "name", "role", "roleId", "isActive"]
+    },
+    "Role": {
+      "title": "Role",
+      "description": "User permission role definition",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string", "maxLength": 64 },
+        "code": { "type": "string", "maxLength": 64 },
+        "name": { "type": "string", "maxLength": 128 },
+        "description": { "type": "string", "maxLength": 512 },
+        "permissions": {
+          "type": "array",
+          "items": { "type": "string" }
+        },
+        "isSystem": { "type": "boolean" }
+      },
+      "required": ["id", "code", "name", "permissions"]
     }
   },
   "firestore": {
@@ -246,6 +287,14 @@
     "/system_settings/{settingId}": {
       "schema": "PingCoIdWhatsAppConfig",
       "description": "System and integration settings"
+    },
+    "/users/{userId}": {
+      "schema": "User",
+      "description": "Super admin, hotel admin, and member users"
+    },
+    "/roles/{roleId}": {
+      "schema": "Role",
+      "description": "Security roles and permissions"
     }
   }
 }

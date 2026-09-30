@@ -6,7 +6,7 @@ import {
   getDocFromServer,
   writeBatch,
 } from 'firebase/firestore';
-import { db, handleFirestoreError, OperationType } from './firebase';
+import { db, handleFirestoreError, OperationType, cleanFirestoreData } from './firebase';
 import {
   Member,
   MembershipTier,
@@ -65,77 +65,96 @@ export async function seedFirestoreIfEmpty(): Promise<{ seeded: boolean; counts:
     const membersSnap = await getDocs(collection(db, 'members'));
     counts.members = membersSnap.size;
 
+    let didSeed = false;
+
     if (membersSnap.empty) {
       console.log('[FIRESTORE SEED] Cloud database empty, seeding initial records...');
       const batch = writeBatch(db);
 
       // 1. Members
       INITIAL_MEMBERS.forEach((m) => {
-        batch.set(doc(db, 'members', m.id), m);
+        batch.set(doc(db, 'members', m.id), cleanFirestoreData(m));
       });
 
       // 2. Tiers
       INITIAL_TIERS.forEach((t) => {
-        batch.set(doc(db, 'membership_tiers', t.id), t);
+        batch.set(doc(db, 'membership_tiers', t.id), cleanFirestoreData(t));
       });
 
       // 3. Benefits
       INITIAL_BENEFITS.forEach((b) => {
-        batch.set(doc(db, 'membership_benefits', b.id), b);
+        batch.set(doc(db, 'membership_benefits', b.id), cleanFirestoreData(b));
       });
 
       // 4. Rules
       INITIAL_RULES.forEach((r) => {
-        batch.set(doc(db, 'membership_rules', r.id), r);
+        batch.set(doc(db, 'membership_rules', r.id), cleanFirestoreData(r));
       });
 
       // 5. Stays
       INITIAL_STAYS.forEach((s) => {
-        batch.set(doc(db, 'stays', s.id), s);
+        batch.set(doc(db, 'stays', s.id), cleanFirestoreData(s));
       });
 
       // 6. Transactions
       INITIAL_TRANSACTIONS.forEach((tx) => {
-        batch.set(doc(db, 'transactions', tx.id), tx);
+        batch.set(doc(db, 'transactions', tx.id), cleanFirestoreData(tx));
       });
 
       // 7. Point Transactions
       INITIAL_POINT_TXS.forEach((ptx) => {
-        batch.set(doc(db, 'point_transactions', ptx.id), ptx);
+        batch.set(doc(db, 'point_transactions', ptx.id), cleanFirestoreData(ptx));
       });
 
       // 8. Rewards
       INITIAL_REWARDS.forEach((rew) => {
-        batch.set(doc(db, 'rewards', rew.id), rew);
+        batch.set(doc(db, 'rewards', rew.id), cleanFirestoreData(rew));
       });
 
       // 9. Vouchers
       INITIAL_VOUCHERS.forEach((vch) => {
-        batch.set(doc(db, 'vouchers', vch.id), vch);
+        batch.set(doc(db, 'vouchers', vch.id), cleanFirestoreData(vch));
       });
 
       // 10. Promotions
       INITIAL_PROMOTIONS.forEach((p) => {
-        batch.set(doc(db, 'promotions', p.id), p);
+        batch.set(doc(db, 'promotions', p.id), cleanFirestoreData(p));
       });
 
       // 11. System Settings
-      batch.set(doc(db, 'system_settings', 'hotel_settings'), INITIAL_SETTINGS);
+      batch.set(doc(db, 'system_settings', 'hotel_settings'), cleanFirestoreData(INITIAL_SETTINGS));
 
       // 12. Users & Roles
       INITIAL_USERS.forEach((u) => {
-        batch.set(doc(db, 'users', u.id), u);
+        batch.set(doc(db, 'users', u.id), cleanFirestoreData(u));
       });
       INITIAL_ROLES.forEach((ro) => {
-        batch.set(doc(db, 'roles', ro.id), ro);
+        batch.set(doc(db, 'roles', ro.id), cleanFirestoreData(ro));
       });
 
       await batch.commit();
+      didSeed = true;
       console.log('[FIRESTORE SEED] Cloud database successfully populated with initial dataset.');
-      return { seeded: true, counts: { members: INITIAL_MEMBERS.length, tiers: INITIAL_TIERS.length } };
     }
 
-    return { seeded: false, counts };
+    // Verify users collection specifically: if empty, seed users & roles
+    const usersSnap = await getDocs(collection(db, 'users'));
+    counts.users = usersSnap.size;
+    if (usersSnap.empty) {
+      console.log('[FIRESTORE SEED] Users collection empty, seeding initial users & roles...');
+      const userBatch = writeBatch(db);
+      INITIAL_USERS.forEach((u) => {
+        userBatch.set(doc(db, 'users', u.id), cleanFirestoreData(u));
+      });
+      INITIAL_ROLES.forEach((ro) => {
+        userBatch.set(doc(db, 'roles', ro.id), cleanFirestoreData(ro));
+      });
+      await userBatch.commit();
+      didSeed = true;
+      counts.users = INITIAL_USERS.length;
+    }
+
+    return { seeded: didSeed, counts };
   } catch (err) {
     console.warn('[FIRESTORE SEED NOTICE]', err);
     return { seeded: false, counts };
@@ -216,16 +235,16 @@ export async function pushAllToFirestore(payload: {
       totalUploaded++;
     });
 
-    batch.set(doc(db, 'system_settings', 'hotel_settings'), payload.systemSettings);
+    batch.set(doc(db, 'system_settings', 'hotel_settings'), cleanFirestoreData(payload.systemSettings));
     totalUploaded++;
 
     payload.users.forEach((u) => {
-      batch.set(doc(db, 'users', u.id), u);
+      batch.set(doc(db, 'users', u.id), cleanFirestoreData(u));
       totalUploaded++;
     });
 
     payload.roles.forEach((ro) => {
-      batch.set(doc(db, 'roles', ro.id), ro);
+      batch.set(doc(db, 'roles', ro.id), cleanFirestoreData(ro));
       totalUploaded++;
     });
 

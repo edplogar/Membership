@@ -66,6 +66,7 @@ export const SuperAdminControlCenter: React.FC<SuperAdminControlCenterProps> = (
     whatsappConfig,
     whatsappLogs,
     emailLogs,
+    users,
     updateWhatsAppConfig,
     addWhatsAppLog,
     openSyncModal,
@@ -408,6 +409,12 @@ export const SuperAdminControlCenter: React.FC<SuperAdminControlCenterProps> = (
             </div>
 
             <div className="p-3.5 rounded-2xl bg-black/25 border border-emerald-800/40 text-center space-y-0.5">
+              <span className="text-[10px] text-emerald-300/80 uppercase font-semibold block">User & Admin</span>
+              <span className="text-xl font-bold font-mono text-white">{users.length}</span>
+              <span className="text-[9px] text-emerald-400/70 block">Akun Aktif</span>
+            </div>
+
+            <div className="p-3.5 rounded-2xl bg-black/25 border border-emerald-800/40 text-center space-y-0.5">
               <span className="text-[10px] text-emerald-300/80 uppercase font-semibold block">Loyalty Tiers</span>
               <span className="text-xl font-bold font-mono text-white">{tiers.length}</span>
               <span className="text-[9px] text-emerald-400/70 block">Tier Aktif</span>
@@ -423,12 +430,6 @@ export const SuperAdminControlCenter: React.FC<SuperAdminControlCenterProps> = (
               <span className="text-[10px] text-emerald-300/80 uppercase font-semibold block">Mutasi Poin</span>
               <span className="text-xl font-bold font-mono text-white">{pointTransactions.length}</span>
               <span className="text-[9px] text-emerald-400/70 block">Log Transaksi</span>
-            </div>
-
-            <div className="p-3.5 rounded-2xl bg-black/25 border border-emerald-800/40 text-center space-y-0.5">
-              <span className="text-[10px] text-emerald-300/80 uppercase font-semibold block">Reward & Voucher</span>
-              <span className="text-xl font-bold font-mono text-white">{rewards.length + vouchers.length}</span>
-              <span className="text-[9px] text-emerald-400/70 block">Katalog Aktif</span>
             </div>
 
             <div className="p-3.5 rounded-2xl bg-black/25 border border-emerald-800/40 text-center space-y-0.5">
