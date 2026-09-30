@@ -29,6 +29,7 @@ import { PointsManagement } from './components/admin/PointsManagement';
 import { RewardsAndVouchersManagement } from './components/admin/RewardsAndVouchersManagement';
 import { ReportsView } from './components/admin/ReportsView';
 import { AuditLogsView } from './components/admin/AuditLogsView';
+import { VoucherScannerModal } from './components/admin/VoucherScannerModal';
 
 // Super Admin views
 import { SuperAdminControlCenter } from './components/superadmin/SuperAdminControlCenter';
@@ -71,9 +72,16 @@ function MainApp() {
 
   // Global modals state
   const [isScannerOpen, setIsScannerOpen] = useState(false);
+  const [isVoucherScannerOpen, setIsVoucherScannerOpen] = useState(false);
+  const [prefilledVoucherMember, setPrefilledVoucherMember] = useState<Member | null>(null);
   const [isSearchOpen, setIsSearchOpen] = useState(false);
   const [isAuthModalOpen, setIsAuthModalOpen] = useState(false);
   const [selectedMemberForDetail, setSelectedMemberForDetail] = useState<Member | null>(null);
+
+  const handleOpenVoucherScanner = (member?: Member) => {
+    setPrefilledVoucherMember(member || null);
+    setIsVoucherScannerOpen(true);
+  };
 
   // Pre-fill action triggers from Front Desk scanner or Member Table
   const [prefilledMember, setPrefilledMember] = useState<Member | null>(null);
@@ -130,6 +138,7 @@ function MainApp() {
         currentTab={activeTab}
         onTabChange={setActiveTab}
         onOpenScanner={() => setIsScannerOpen(true)}
+        onOpenVoucherScanner={() => handleOpenVoucherScanner()}
         onSearchClick={() => setIsSearchOpen(true)}
       />
 
@@ -180,6 +189,7 @@ function MainApp() {
               <AdminDashboard
                 onNavigate={setActiveTab}
                 onOpenScanner={() => setIsScannerOpen(true)}
+                onOpenVoucherScanner={() => handleOpenVoucherScanner()}
                 onOpenAddMember={() => {
                   setActiveTab('admin_members');
                   setIsAddMemberOpen(true);
@@ -304,7 +314,7 @@ function MainApp() {
         )}
       </main>
 
-      {/* 4. Front Desk QR Code Scanner Modal */}
+      {/* 4. Front Desk QR & Barcode Scanner Modal */}
       <FrontDeskScannerModal
         isOpen={isScannerOpen}
         onClose={() => setIsScannerOpen(false)}
@@ -312,9 +322,19 @@ function MainApp() {
         onActionAddTransaction={handleAddTxMember}
         onActionAdjustPoints={handleAdjustPointsMember}
         onActionViewProfile={handleViewProfileMember}
+        onOpenVoucherScanner={handleOpenVoucherScanner}
         onOpenAddMember={() => {
           setActiveTab('admin_members');
           setIsAddMemberOpen(true);
+        }}
+      />
+
+      {/* 4b. Hotel Voucher Barcode Scanner Modal */}
+      <VoucherScannerModal
+        isOpen={isVoucherScannerOpen}
+        onClose={() => {
+          setIsVoucherScannerOpen(false);
+          setPrefilledVoucherMember(null);
         }}
       />
 

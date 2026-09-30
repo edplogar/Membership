@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { Member, MembershipTier } from '../../types';
 import { QRCodeView } from '../common/QRCodeView';
+import { BarcodeView } from '../common/BarcodeView';
 import { formatDateIndo } from '../../services/membershipEngine';
 import { LombokGardenLogo } from '../common/LombokGardenLogo';
 import {
@@ -9,6 +10,7 @@ import {
   Maximize2,
   Calendar,
   Award,
+  ScanLine,
 } from 'lucide-react';
 import { Modal } from '../common/Modal';
 
@@ -26,6 +28,7 @@ export const DigitalMembershipCard: React.FC<DigitalMembershipCardProps> = ({
   onViewBenefits,
 }) => {
   const [showFullQR, setShowFullQR] = useState(false);
+  const [codeType, setCodeType] = useState<'qr' | 'barcode'>('qr');
 
   // Background and styling by tier
   const getCardTheme = () => {
@@ -222,25 +225,65 @@ export const DigitalMembershipCard: React.FC<DigitalMembershipCardProps> = ({
         )}
       </div>
 
-      {/* Full-Screen QR Modal for Front Desk Staff Scan */}
+      {/* Full-Screen QR & Barcode Modal for Front Desk & POS Staff Scan */}
       <Modal
         isOpen={showFullQR}
         onClose={() => setShowFullQR(false)}
-        title="QR Code Membership Tamu"
+        title="ID Kartu Membership Digital"
         subtitle="Tunjukkan kepada front desk saat check-in, transaksi restoran, atau spa"
         maxWidth="sm"
       >
-        <div className="text-center py-4 flex flex-col items-center">
-          <QRCodeView
-            value={member.membershipNumber}
-            size={220}
-            className="mb-4"
-          />
+        <div className="text-center py-2 flex flex-col items-center">
+          {/* Format Toggle Buttons */}
+          <div className="flex items-center gap-1.5 p-1 bg-stone-100 rounded-xl mb-4 border border-stone-200">
+            <button
+              type="button"
+              onClick={() => setCodeType('qr')}
+              className={`px-3 py-1.5 rounded-lg text-xs font-semibold flex items-center gap-1.5 transition-all cursor-pointer ${
+                codeType === 'qr'
+                  ? 'bg-white text-stone-900 shadow-xs font-bold'
+                  : 'text-stone-600 hover:text-stone-900'
+              }`}
+            >
+              <QrCode className="w-3.5 h-3.5 text-emerald-600" />
+              <span>QR Code (2D)</span>
+            </button>
+            <button
+              type="button"
+              onClick={() => setCodeType('barcode')}
+              className={`px-3 py-1.5 rounded-lg text-xs font-semibold flex items-center gap-1.5 transition-all cursor-pointer ${
+                codeType === 'barcode'
+                  ? 'bg-white text-stone-900 shadow-xs font-bold'
+                  : 'text-stone-600 hover:text-stone-900'
+              }`}
+            >
+              <ScanLine className="w-3.5 h-3.5 text-amber-600" />
+              <span>Barcode Linear (1D)</span>
+            </button>
+          </div>
+
+          {/* Display Code */}
+          <div className="min-h-[220px] flex items-center justify-center mb-3">
+            {codeType === 'qr' ? (
+              <QRCodeView
+                value={member.membershipNumber}
+                size={220}
+                showLogo={true}
+              />
+            ) : (
+              <BarcodeView
+                value={member.membershipNumber}
+                width={260}
+                height={70}
+                showText={true}
+              />
+            )}
+          </div>
 
           <div className="font-mono text-lg font-bold text-stone-900 tracking-wider">
             {member.membershipNumber}
           </div>
-          <div className="font-semibold text-stone-800 mt-1">
+          <div className="font-semibold text-stone-800 mt-0.5">
             {member.fullName}
           </div>
           <div className="text-xs text-stone-500 mt-0.5">
@@ -248,9 +291,8 @@ export const DigitalMembershipCard: React.FC<DigitalMembershipCardProps> = ({
             {member.availablePoints} Poin Tersedia
           </div>
 
-          <p className="text-[11px] text-stone-400 max-w-xs mt-4 leading-relaxed">
-            Staff resepsionis dapat memindai kode QR ini langsung untuk verifikasi
-            keanggotaan, penambahan poin, dan aktivasi benefit diskon.
+          <p className="text-[11px] text-stone-400 max-w-xs mt-3 leading-relaxed">
+            Staf hotel dapat memindai QR code ini menggunakan kamera atau barcode scanner gun untuk verifikasi membership, perolehan poin, atau redeem voucher.
           </p>
         </div>
       </Modal>

@@ -22,6 +22,8 @@ export type PermissionCode =
   | 'voucher.create'
   | 'voucher.edit'
   | 'voucher.delete'
+  | 'voucher.redeem'
+  | 'voucher.scan_only'
   | 'stay.view'
   | 'stay.create'
   | 'stay.edit'
@@ -274,9 +276,13 @@ export interface VoucherRedemption {
   voucherCode: string;
   discountApplied: number;
   claimedAt: string;
-  status: 'available' | 'used';
+  status: 'available' | 'used' | 'expired';
   usedAt?: string;
   transactionNumber?: string;
+  redeemedByStaffName?: string;
+  redeemedByStaffRole?: string;
+  outlet?: string;
+  notes?: string;
 }
 
 export interface PromotionCampaign {
@@ -411,7 +417,7 @@ export interface WhatsAppMessageLog {
 export interface EmailSystemConfig {
   defaultSenderEmail: string; // e.g. "membership@lombokgardenhotel.com" or "edp.logar@gmail.com"
   defaultSenderName: string; // e.g. "Lombok Garden Hotel Concierge"
-  replyToEmail: string; // e.g. "guestservice@lombokgardenhotel.com"
+  replyToEmail: string; // e.g. "edp@lombokgardenhotel.com"
   provider: 'smtp' | 'gmail' | 'sendgrid' | 'resend' | 'custom';
   smtpHost: string; // e.g. "smtp.gmail.com" or "mail.lombokgardenhotel.com"
   smtpPort: number; // 465, 587, 25

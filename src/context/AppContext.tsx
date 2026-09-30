@@ -44,6 +44,7 @@ import {
   INITIAL_INTEGRATIONS,
   INITIAL_USERS,
   INITIAL_ROLES,
+  INITIAL_VOUCHER_REDEMPTIONS,
   loadFromStorage,
   saveToStorage,
 } from '../services/storage';
@@ -67,6 +68,7 @@ import {
   sendPointUpdateEmail,
   sendMemberCustomNotificationEmail,
 } from '../services/emailService';
+import { apiFetch } from '../services/apiClient';
 import {
   calculatePointsEarned,
   evaluateMemberTierRules,
@@ -74,6 +76,7 @@ import {
   createNotificationRecord,
   generateMembershipNumber,
   formatIDR,
+  formatDateIndo,
 } from '../services/membershipEngine';
 import {
   db,
@@ -100,6 +103,16 @@ import {
 } from '../services/dbSyncService';
 import { useAuth } from './AuthContext';
 import { useToast } from './ToastContext';
+
+export interface VerifyVoucherResult {
+  isValid: boolean;
+  status: 'available' | 'used' | 'expired' | 'not_found';
+  message: string;
+  voucher?: Voucher;
+  member?: Member;
+  redemption?: VoucherRedemption;
+  rewardRedemption?: RewardRedemption;
+}
 
 interface AppContextValue {
   members: Member[];
@@ -149,6 +162,27 @@ interface AppContextValue {
   redeemReward: (memberId: string, rewardId: string) => { success: boolean; message: string; code?: string };
   claimVoucher: (memberId: string, voucherId: string) => { success: boolean; message: string };
   useVoucher: (redemptionId: string) => void;
+  verifyVoucherByBarcode: (barcodeOrCode: string) => {
+    isValid: boolean;
+    status: 'available' | 'used' | 'expired' | 'not_found';
+    voucher?: Voucher;
+    member?: Member;
+    redemption?: VoucherRedemption;
+    rewardRedemption?: RewardRedemption;
+    message: string;
+  };
+  redeemVoucherByBarcode: (
+    barcodeOrCode: string,
+    staffInfo: { name: string; role?: string; outlet?: string; transactionNumber?: string; notes?: string }
+  ) => {
+    success: boolean;
+    message: string;
+    voucher?: Voucher;
+    member?: Member;
+    redemption?: VoucherRedemption;
+    rewardRedemption?: RewardRedemption;
+    errorReason?: string;
+  };
 
   saveTier: (tier: MembershipTier) => void;
   deleteTier: (id: string) => void;
@@ -208,7 +242,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
   const [rewards, setRewards] = useState<Reward[]>(() => loadFromStorage('rewards', INITIAL_REWARDS));
   const [redemptions, setRedemptions] = useState<RewardRedemption[]>(() => loadFromStorage('redemptions', INITIAL_REDEMPTIONS));
   const [vouchers, setVouchers] = useState<Voucher[]>(() => loadFromStorage('vouchers', INITIAL_VOUCHERS));
-  const [voucherRedemptions, setVoucherRedemptions] = useState<VoucherRedemption[]>(() => loadFromStorage('voucherRedemptions', []));
+  const [voucherRedemptions, setVoucherRedemptions] = useState<VoucherRedemption[]>(() => loadFromStorage('voucherRedemptions', INITIAL_VOUCHER_REDEMPTIONS));
   const [promotions, setPromotions] = useState<PromotionCampaign[]>(() => loadFromStorage('promotions', INITIAL_PROMOTIONS));
   const [notifications, setNotifications] = useState<AppNotification[]>(() => loadFromStorage('notifications', INITIAL_NOTIFICATIONS));
   const [auditLogs, setAuditLogs] = useState<AuditLog[]>(() => loadFromStorage('auditLogs', INITIAL_AUDIT_LOGS));
@@ -1032,7 +1066,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
     return { success: true, message: 'Voucher berhasil diklaim' };
   };
 
-  // Use Voucher
+  // Use Voucher (Classic)
   const useVoucher = (redemptionId: string) => {
     const updated = voucherRedemptions.map((r) =>
       r.id === redemptionId ? { ...r, status: 'used' as const, usedAt: new Date().toISOString() } : r
@@ -1043,6 +1077,326 @@ export function AppProvider({ children }: { children: ReactNode }) {
       if (item) setDoc(doc(db, 'voucher_redemptions', redemptionId), item).catch(() => {});
     } catch {}
     showToast('Voucher berhasil digunakan pada transaksi.', 'success');
+  };
+
+  // Verify Voucher By Barcode/Code
+  const verifyVoucherByBarcode = (barcodeOrCode: string): VerifyVoucherResult => {
+    const raw = (barcodeOrCode || '').trim();
+    if (!raw) {
+      return { isValid: false, status: 'not_found' as const, message: 'Kode barcode kosong.' };
+    }
+
+    let searchCode = raw;
+    try {
+      if (raw.startsWith('{') && raw.endsWith('}')) {
+        const parsed = JSON.parse(raw);
+        searchCode = parsed.code || parsed.voucherCode || parsed.id || raw;
+      }
+    } catch {}
+
+    const codeUpper = searchCode.toUpperCase();
+
+    // 1. Check in voucherRedemptions
+    const existingClaim = voucherRedemptions.find(
+      (vr) =>
+        vr.id.toUpperCase() === codeUpper ||
+        vr.voucherCode.toUpperCase() === codeUpper
+    );
+
+    if (existingClaim) {
+      const voucher = vouchers.find((v) => v.id === existingClaim.voucherId) || {
+        id: existingClaim.voucherId,
+        code: existingClaim.voucherCode,
+        title: `Voucher Promosi (${existingClaim.voucherCode})`,
+        description: 'Voucher Promosi Eksklusif Lombok Garden Hotel',
+        type: 'fixed' as const,
+        discountValue: existingClaim.discountApplied,
+        minTransaction: 0,
+        maxDiscount: existingClaim.discountApplied,
+        startDate: existingClaim.claimedAt,
+        expiryDate: '2026-12-31',
+        usageLimit: 1,
+        usedCount: 1,
+        perMemberLimit: 1,
+        applicableTierIds: [],
+        status: 'active' as const,
+      };
+
+      const member = members.find((m) => m.id === existingClaim.memberId);
+
+      if (existingClaim.status === 'used') {
+        const usedDateStr = existingClaim.usedAt ? formatDateIndo(existingClaim.usedAt.slice(0, 10)) : 'sebelumnya';
+        return {
+          isValid: false,
+          status: 'used' as const,
+          voucher,
+          member,
+          redemption: existingClaim,
+          message: `Voucher "${voucher.title}" SUDAH PERNAH DIGUNAKAN pada ${usedDateStr}${existingClaim.outlet ? ` di ${existingClaim.outlet}` : ''}${existingClaim.redeemedByStaffName ? ` oleh ${existingClaim.redeemedByStaffName}` : ''}.`,
+        };
+      }
+
+      return {
+        isValid: true,
+        status: 'available' as const,
+        voucher,
+        member,
+        redemption: existingClaim,
+        message: `Voucher valid terdeteksi: "${voucher.title}" milik tamu ${member?.fullName || 'Tamu'}.`,
+      };
+    }
+
+    // 2. Check in redemptions (Poin Reward)
+    const existingReward = redemptions.find(
+      (r) =>
+        r.id.toUpperCase() === codeUpper ||
+        r.redemptionCode.toUpperCase() === codeUpper
+    );
+
+    if (existingReward) {
+      const member = members.find((m) => m.id === existingReward.memberId);
+      const pseudoVoucher: Voucher = {
+        id: existingReward.rewardId,
+        code: existingReward.redemptionCode,
+        title: existingReward.rewardTitle,
+        description: `Reward Poin Loyalitas (${existingReward.pointsSpent} Poin)`,
+        type: 'complimentary',
+        discountValue: 0,
+        minTransaction: 0,
+        maxDiscount: 0,
+        startDate: existingReward.redeemedAt,
+        expiryDate: existingReward.expiresAt,
+        usageLimit: 1,
+        usedCount: existingReward.status === 'used' ? 1 : 0,
+        perMemberLimit: 1,
+        applicableTierIds: [],
+        status: 'active',
+      };
+
+      if (existingReward.status === 'used') {
+        const usedDateStr = existingReward.usedAt ? formatDateIndo(existingReward.usedAt.slice(0, 10)) : 'sebelumnya';
+        return {
+          isValid: false,
+          status: 'used' as const,
+          voucher: pseudoVoucher,
+          member,
+          rewardRedemption: existingReward,
+          message: `Reward Voucher "${existingReward.rewardTitle}" SUDAH DIGUNAKAN pada ${usedDateStr}.`,
+        };
+      }
+
+      return {
+        isValid: true,
+        status: 'available' as const,
+        voucher: pseudoVoucher,
+        member,
+        rewardRedemption: existingReward,
+        message: `Reward Voucher valid: "${existingReward.rewardTitle}" (${existingReward.redemptionCode}) milik ${member?.fullName || 'Tamu'}.`,
+      };
+    }
+
+    // 3. Check in master vouchers by promo code
+    const masterVoucher = vouchers.find((v) => v.code.toUpperCase() === codeUpper);
+    if (masterVoucher) {
+      if (masterVoucher.status !== 'active') {
+        return {
+          isValid: false,
+          status: 'expired' as const,
+          voucher: masterVoucher,
+          message: `Voucher "${masterVoucher.title}" saat ini berstatus ${masterVoucher.status}.`,
+        };
+      }
+
+      return {
+        isValid: true,
+        status: 'available' as const,
+        voucher: masterVoucher,
+        message: `Kupon Promosi "${masterVoucher.title}" (${masterVoucher.code}) siap diredeem.`,
+      };
+    }
+
+    return {
+      isValid: false,
+      status: 'not_found' as const,
+      message: `Kode voucher atau barcode "${raw}" tidak ditemukan pada daftar voucher hotel.`,
+    };
+  };
+
+  // Redeem Voucher By Barcode/Code
+  const redeemVoucherByBarcode = (
+    barcodeOrCode: string,
+    staffInfo: { name: string; role?: string; outlet?: string; transactionNumber?: string; notes?: string }
+  ) => {
+    const verified = verifyVoucherByBarcode(barcodeOrCode);
+    if (!verified.isValid) {
+      showToast(verified.message, 'error');
+      return {
+        success: false,
+        message: verified.message,
+        voucher: verified.voucher,
+        member: verified.member,
+        redemption: verified.redemption,
+        errorReason: verified.status === 'used' ? 'ALREADY_USED' : 'INVALID_CODE',
+      };
+    }
+
+    const now = new Date().toISOString();
+    const outlet = staffInfo.outlet || 'Front Desk';
+    const staffName = staffInfo.name || 'Staff Front Desk';
+    const staffRole = staffInfo.role || 'Staff FO/FB';
+
+    // A. Existing Claim in voucherRedemptions
+    if (verified.redemption) {
+      const redId = verified.redemption.id;
+      const updatedItem: VoucherRedemption = {
+        ...verified.redemption,
+        status: 'used',
+        usedAt: now,
+        transactionNumber: staffInfo.transactionNumber || verified.redemption.transactionNumber,
+        redeemedByStaffName: staffName,
+        redeemedByStaffRole: staffRole,
+        outlet,
+        notes: staffInfo.notes || verified.redemption.notes || `Redeem via Barcode Scan di ${outlet}`,
+      };
+
+      setVoucherRedemptions((prev) =>
+        prev.map((r) => (r.id === redId ? updatedItem : r))
+      );
+
+      // Increment voucher usedCount
+      if (verified.voucher) {
+        setVouchers((prev) =>
+          prev.map((v) => (v.id === verified.voucher?.id ? { ...v, usedCount: (v.usedCount || 0) + 1 } : v))
+        );
+      }
+
+      // Sync to Firestore
+      try {
+        setDoc(doc(db, 'voucher_redemptions', redId), updatedItem).catch(() => {});
+        if (verified.voucher) {
+          setDoc(doc(db, 'vouchers', verified.voucher.id), {
+            ...verified.voucher,
+            usedCount: (verified.voucher.usedCount || 0) + 1,
+          }).catch(() => {});
+        }
+      } catch {}
+
+      // Log Audit
+      logAudit(
+        'REDEEM_VOUCHER_BARCODE',
+        'VOUCHER_ENGINE',
+        redId,
+        `Staff: ${staffName} (${outlet})`,
+        `Voucher: ${verified.voucher?.code || redId} - ${verified.voucher?.title}`
+      );
+
+      if (verified.member) {
+        const notif = createNotificationRecord(
+          verified.member.id,
+          'Voucher Berhasil Digunakan',
+          `Voucher "${verified.voucher?.title}" berhasil digunakan di ${outlet} pada ${formatDateIndo(now.slice(0, 10))}.`,
+          'voucher'
+        );
+        setNotifications((prev) => [notif, ...prev]);
+      }
+
+      showToast(`Voucher "${verified.voucher?.title}" BERHASIL DIREDEEM di ${outlet}!`, 'success');
+      return {
+        success: true,
+        message: `Voucher berhasil diredeem untuk ${verified.member?.fullName || 'Tamu'}.`,
+        voucher: verified.voucher,
+        member: verified.member,
+        redemption: updatedItem,
+      };
+    }
+
+    // B. Reward Redemption from points
+    if (verified.rewardRedemption) {
+      const rewId = verified.rewardRedemption.id;
+      const updatedReward: RewardRedemption = {
+        ...verified.rewardRedemption,
+        status: 'used',
+        usedAt: now,
+        notes: staffInfo.notes || `Redeem via Barcode di ${outlet} oleh ${staffName}`,
+      };
+
+      setRedemptions((prev) =>
+        prev.map((r) => (r.id === rewId ? updatedReward : r))
+      );
+
+      try {
+        setDoc(doc(db, 'reward_redemptions', rewId), updatedReward).catch(() => {});
+      } catch {}
+
+      logAudit(
+        'REDEEM_REWARD_BARCODE',
+        'REWARDS',
+        rewId,
+        `Staff: ${staffName} (${outlet})`,
+        `Reward: ${verified.rewardRedemption.rewardTitle}`
+      );
+
+      showToast(`Reward Voucher "${verified.rewardRedemption.rewardTitle}" BERHASIL DIREDEEM!`, 'success');
+      return {
+        success: true,
+        message: 'Reward voucher berhasil diverifikasi dan digunakan.',
+        voucher: verified.voucher,
+        member: verified.member,
+        rewardRedemption: updatedReward,
+      };
+    }
+
+    // C. Master Voucher direct claim & redeem
+    if (verified.voucher) {
+      const v = verified.voucher;
+      const newRedemption: VoucherRedemption = {
+        id: `vrdm_${Date.now()}`,
+        memberId: verified.member?.id || 'mem_walk_in',
+        voucherId: v.id,
+        voucherCode: v.code,
+        discountApplied: v.discountValue,
+        claimedAt: now,
+        status: 'used',
+        usedAt: now,
+        transactionNumber: staffInfo.transactionNumber,
+        redeemedByStaffName: staffName,
+        redeemedByStaffRole: staffRole,
+        outlet,
+        notes: staffInfo.notes || `Redeem langsung via Barcode di ${outlet}`,
+      };
+
+      setVoucherRedemptions((prev) => [newRedemption, ...prev]);
+      setVouchers((prev) =>
+        prev.map((item) => (item.id === v.id ? { ...item, usedCount: (item.usedCount || 0) + 1 } : item))
+      );
+
+      try {
+        setDoc(doc(db, 'voucher_redemptions', newRedemption.id), newRedemption).catch(() => {});
+        setDoc(doc(db, 'vouchers', v.id), { ...v, usedCount: (v.usedCount || 0) + 1 }).catch(() => {});
+      } catch {}
+
+      logAudit(
+        'REDEEM_VOUCHER_BARCODE',
+        'VOUCHER_ENGINE',
+        newRedemption.id,
+        `Staff: ${staffName} (${outlet})`,
+        `Voucher: ${v.code} - ${v.title}`
+      );
+
+      showToast(`Voucher "${v.title}" BERHASIL DIREDEEM di ${outlet}!`, 'success');
+      return {
+        success: true,
+        message: `Voucher berhasil diredeem.`,
+        voucher: v,
+        member: verified.member,
+        redemption: newRedemption,
+      };
+    }
+
+    return {
+      success: false,
+      message: 'Gagal memproses voucher.',
+    };
   };
 
   // Tier Management
@@ -1217,9 +1571,8 @@ export function AppProvider({ children }: { children: ReactNode }) {
         setDoc(doc(db, 'system_settings', 'email_config'), updated).catch(() => {});
       } catch {}
       // Also update backend server config
-      fetch('/api/email/config', {
+      apiFetch('/api/email/config', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(updated),
       }).catch(() => {});
       return updated;
@@ -1454,6 +1807,8 @@ export function AppProvider({ children }: { children: ReactNode }) {
         redeemReward,
         claimVoucher,
         useVoucher,
+        verifyVoucherByBarcode,
+        redeemVoucherByBarcode,
         saveTier,
         deleteTier,
         saveBenefit,

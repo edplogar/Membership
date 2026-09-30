@@ -14,12 +14,14 @@ import {
   ShieldCheck,
   QrCode,
   Mail,
+  Ticket,
 } from 'lucide-react';
 
 interface NavbarProps {
   currentTab: string;
   onTabChange: (tab: string) => void;
   onOpenScanner: () => void;
+  onOpenVoucherScanner?: () => void;
   onSearchClick: () => void;
   onOpenLogin?: () => void;
 }
@@ -28,6 +30,7 @@ export const Navbar: React.FC<NavbarProps> = ({
   currentTab,
   onTabChange,
   onOpenScanner,
+  onOpenVoucherScanner,
   onSearchClick,
   onOpenLogin,
 }) => {
@@ -63,6 +66,7 @@ export const Navbar: React.FC<NavbarProps> = ({
         { id: 'admin_members', label: 'Data Member' },
         { id: 'admin_stays', label: 'Stay & Kunjungan' },
         { id: 'admin_transactions', label: 'Transaksi' },
+        { id: 'admin_rewards', label: 'Voucher & Promo' },
         { id: 'admin_points', label: 'Poin & Loyalitas' },
         { id: 'admin_tiers', label: 'Tier & Rules' },
         { id: 'admin_reports', label: 'Laporan' },
@@ -72,9 +76,10 @@ export const Navbar: React.FC<NavbarProps> = ({
       return [
         { id: 'super_dashboard', label: 'Control Center' },
         { id: 'admin_members', label: 'Member' },
-        { id: 'admin_points', label: 'Manajemen Poin' },
-        { id: 'super_email', label: 'Email & Reset' },
         { id: 'admin_transactions', label: 'Transaksi' },
+        { id: 'admin_rewards', label: 'Voucher & Promo' },
+        { id: 'admin_points', label: 'Poin' },
+        { id: 'super_email', label: 'Email & Reset' },
         { id: 'super_whatsapp', label: 'WhatsApp CRM' },
         { id: 'super_admins', label: 'Hak Akses' },
         { id: 'admin_audit', label: 'Audit Log' },
@@ -125,14 +130,27 @@ export const Navbar: React.FC<NavbarProps> = ({
         <div className="flex items-center gap-2 sm:gap-3">
           {/* Scanner shortcut button for staff/admins */}
           {userRole !== 'MEMBER' && (
-            <button
-              onClick={onOpenScanner}
-              className="px-3 py-1.5 bg-[#00A651] hover:bg-[#008f45] text-white rounded-xl transition-all flex items-center gap-1.5 text-xs font-bold shadow-xs cursor-pointer"
-              title="Pindai Kartu Member / QR Code Tamu"
-            >
-              <QrCode className="w-3.5 h-3.5" />
-              <span className="hidden sm:inline">Pindai Kartu</span>
-            </button>
+            <div className="flex items-center gap-1.5">
+              <button
+                onClick={onOpenScanner}
+                className="px-3 py-1.5 bg-[#00A651] hover:bg-[#008f45] text-white rounded-xl transition-all flex items-center gap-1.5 text-xs font-bold shadow-xs cursor-pointer"
+                title="Pindai Kartu Member / Barcode Tamu"
+              >
+                <QrCode className="w-3.5 h-3.5" />
+                <span className="hidden sm:inline">Pindai Member</span>
+              </button>
+
+              {onOpenVoucherScanner && (
+                <button
+                  onClick={onOpenVoucherScanner}
+                  className="px-3 py-1.5 bg-amber-600 hover:bg-amber-700 text-white rounded-xl transition-all flex items-center gap-1.5 text-xs font-bold shadow-xs cursor-pointer"
+                  title="Pindai Barcode / QR Voucher Tamu"
+                >
+                  <Ticket className="w-3.5 h-3.5" />
+                  <span className="hidden md:inline">Redeem Voucher</span>
+                </button>
+              )}
+            </div>
           )}
 
           {/* Global Search button for staff */}

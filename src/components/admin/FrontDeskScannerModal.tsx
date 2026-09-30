@@ -1,9 +1,11 @@
 import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { useApp } from '../../context/AppContext';
-import { Member, MembershipTier } from '../../types';
+import { useAuth } from '../../context/AuthContext';
+import { useToast } from '../../context/ToastContext';
+import { Member, MembershipTier, Voucher, VoucherRedemption } from '../../types';
 import { Modal } from '../common/Modal';
 import { LombokGardenLogo } from '../common/LombokGardenLogo';
-import { formatDateIndo } from '../../services/membershipEngine';
+import { formatDateIndo, formatIDR } from '../../services/membershipEngine';
 import jsQR from 'jsqr';
 import {
   Search,
@@ -29,6 +31,11 @@ import {
   MapPin,
   Flame,
   ArrowRight,
+  Ticket,
+  UtensilsCrossed,
+  Flower2,
+  Building2,
+  Tag,
 } from 'lucide-react';
 
 interface FrontDeskScannerModalProps {
@@ -39,6 +46,7 @@ interface FrontDeskScannerModalProps {
   onActionAdjustPoints: (member: Member) => void;
   onActionViewProfile: (member: Member) => void;
   onOpenAddMember?: () => void;
+  onOpenVoucherScanner?: (member?: Member) => void;
 }
 
 export const FrontDeskScannerModal: React.FC<FrontDeskScannerModalProps> = ({
@@ -49,8 +57,10 @@ export const FrontDeskScannerModal: React.FC<FrontDeskScannerModalProps> = ({
   onActionAdjustPoints,
   onActionViewProfile,
   onOpenAddMember,
+  onOpenVoucherScanner,
 }) => {
-  const { members, tiers } = useApp();
+  const { members, tiers, vouchers } = useApp();
+  const { showToast } = useToast();
 
   // Mode: 'camera' | 'upload' | 'manual'
   const [scanMode, setScanMode] = useState<'camera' | 'upload' | 'manual'>('camera');
@@ -73,6 +83,31 @@ export const FrontDeskScannerModal: React.FC<FrontDeskScannerModalProps> = ({
   const streamRef = useRef<MediaStream | null>(null);
   const animationFrameRef = useRef<number | null>(null);
   const lastDetectionTimeRef = useRef<number>(0);
+  const barcodeDetectorRef = useRef<any>(null);
+
+  // Initialize native BarcodeDetector for 1D Barcodes (Code128, Code39, EAN) & QR
+  useEffect(() => {
+    if (typeof window !== 'undefined' && 'BarcodeDetector' in window) {
+      try {
+        barcodeDetectorRef.current = new (window as any).BarcodeDetector({
+          formats: [
+            'code_128',
+            'code_39',
+            'ean_13',
+            'ean_8',
+            'upc_a',
+            'upc_e',
+            'qr_code',
+            'data_matrix',
+            'itf',
+            'codabar',
+          ],
+        });
+      } catch (e) {
+        console.warn('Native BarcodeDetector initialization notice, falling back to jsQR:', e);
+      }
+    }
+  }, []);
 
   // Harmonious Multi-Tone Luxury Concierge Chime via Web Audio API
   const playSuccessChime = useCallback(() => {
@@ -194,11 +229,27 @@ export const FrontDeskScannerModal: React.FC<FrontDeskScannerModalProps> = ({
       setTimeout(() => setIsFlashing(false), 850);
       setSelectedMember(found);
       setSearchQuery('');
+      showToast(`Member Terverifikasi: ${found.fullName} (${found.membershipNumber})`, 'success');
     } else {
       playErrorBuzz();
-      setScanError(`Kode "${clean}" terdeteksi, namun tidak cocok dengan nomor kartu atau ID member terdaftar.`);
+      // Check if this looks like a voucher code
+      const isVoucherLike =
+        vouchers.some((v) => v.code.toLowerCase() === keyLower || v.id.toLowerCase() === keyLower) ||
+        clean.toUpperCase().startsWith('VCH-') ||
+        clean.toUpperCase().startsWith('PROMO-') ||
+        clean.toUpperCase().startsWith('REW-') ||
+        clean.startsWith('vrdm_') ||
+        clean.startsWith('rew_');
+
+      if (isVoucherLike) {
+        showToast(`Kode "${clean}" terdeteksi sebagai Barcode Voucher. Buka menu Redeem Voucher untuk memproses.`, 'info');
+        setScanError(`Kode "${clean}" adalah Barcode Voucher. Gunakan tombol "Redeem Voucher" di bawah untuk memproses kupon ini.`);
+      } else {
+        showToast(`Barcode / QR "${clean}" tidak ditemukan di database member hotel.`, 'error');
+        setScanError(`Kode "${clean}" terdeteksi, namun tidak cocok dengan nomor kartu atau ID member terdaftar.`);
+      }
     }
-  }, [members, lastScannedRaw, playSuccessChime, playErrorBuzz]);
+  }, [members, vouchers, lastScannedRaw, playSuccessChime, playErrorBuzz, showToast]);
 
   // Stop camera tracks cleanly
   const stopCamera = useCallback(() => {
@@ -217,7 +268,7 @@ export const FrontDeskScannerModal: React.FC<FrontDeskScannerModalProps> = ({
     }
   }, []);
 
-  // Frame processing loop
+  // Frame processing loop with native BarcodeDetector for 1D barcodes and jsQR fallback
   const scanVideoFrame = useCallback(() => {
     if (!videoRef.current || videoRef.current.readyState !== videoRef.current.HAVE_ENOUGH_DATA) {
       animationFrameRef.current = requestAnimationFrame(scanVideoFrame);
@@ -240,15 +291,44 @@ export const FrontDeskScannerModal: React.FC<FrontDeskScannerModalProps> = ({
       const ctx = canvas.getContext('2d', { willReadFrequently: true });
       if (ctx) {
         ctx.drawImage(video, 0, 0, width, height);
-        const imageData = ctx.getImageData(0, 0, width, height);
 
-        // Scan using jsQR
-        const code = jsQR(imageData.data, imageData.width, imageData.height, {
-          inversionAttempts: 'attemptBoth',
-        });
-
-        if (code && code.data) {
-          handleDecodedData(code.data);
+        // 1. First attempt: Native BarcodeDetector (reads 1D Barcodes: Code 128, Code 39, EAN-13, EAN-8, etc.)
+        if (barcodeDetectorRef.current) {
+          barcodeDetectorRef.current
+            .detect(canvas)
+            .then((barcodes: any[]) => {
+              if (barcodes && barcodes.length > 0 && barcodes[0].rawValue) {
+                handleDecodedData(barcodes[0].rawValue);
+              } else {
+                // Fallback to jsQR for 2D QR codes
+                const imageData = ctx.getImageData(0, 0, width, height);
+                const code = jsQR(imageData.data, imageData.width, imageData.height, {
+                  inversionAttempts: 'attemptBoth',
+                });
+                if (code && code.data) {
+                  handleDecodedData(code.data);
+                }
+              }
+            })
+            .catch(() => {
+              // Fallback to jsQR
+              const imageData = ctx.getImageData(0, 0, width, height);
+              const code = jsQR(imageData.data, imageData.width, imageData.height, {
+                inversionAttempts: 'attemptBoth',
+              });
+              if (code && code.data) {
+                handleDecodedData(code.data);
+              }
+            });
+        } else {
+          // Fallback if BarcodeDetector unsupported
+          const imageData = ctx.getImageData(0, 0, width, height);
+          const code = jsQR(imageData.data, imageData.width, imageData.height, {
+            inversionAttempts: 'attemptBoth',
+          });
+          if (code && code.data) {
+            handleDecodedData(code.data);
+          }
         }
       }
     }
@@ -343,7 +423,54 @@ export const FrontDeskScannerModal: React.FC<FrontDeskScannerModalProps> = ({
     setSelectedDeviceId('');
   };
 
-  // Image Upload Scanner
+  // Global listener for USB / Bluetooth physical Barcode Scanner Guns
+  useEffect(() => {
+    if (!isOpen) return;
+
+    let keyBuffer = '';
+    let lastKeyTime = Date.now();
+
+    const handleKeyDown = (e: KeyboardEvent) => {
+      // Don't intercept if user is typing in manual search box
+      const target = e.target as HTMLElement;
+      if (
+        target &&
+        (target.tagName === 'INPUT' || target.tagName === 'TEXTAREA' || target.isContentEditable) &&
+        target.id !== 'scanner-gun-receiver'
+      ) {
+        return;
+      }
+
+      const now = Date.now();
+      const diff = now - lastKeyTime;
+      lastKeyTime = now;
+
+      // Barcode guns send fast keystrokes ending with Enter
+      if (e.key === 'Enter') {
+        if (keyBuffer.trim().length >= 3) {
+          handleDecodedData(keyBuffer.trim());
+          keyBuffer = '';
+        }
+        return;
+      }
+
+      // Reset buffer if delay > 120ms (manual typing vs scanner gun)
+      if (diff > 120) {
+        keyBuffer = '';
+      }
+
+      if (e.key.length === 1) {
+        keyBuffer += e.key;
+      }
+    };
+
+    window.addEventListener('keydown', handleKeyDown);
+    return () => {
+      window.removeEventListener('keydown', handleKeyDown);
+    };
+  }, [isOpen, handleDecodedData]);
+
+  // Image Upload Scanner (Supporting 1D Barcode and QR)
   const handleFileUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
@@ -351,13 +478,28 @@ export const FrontDeskScannerModal: React.FC<FrontDeskScannerModalProps> = ({
     const reader = new FileReader();
     reader.onload = (event) => {
       const img = new Image();
-      img.onload = () => {
+      img.onload = async () => {
         const canvas = document.createElement('canvas');
         canvas.width = img.width;
         canvas.height = img.height;
         const ctx = canvas.getContext('2d');
         if (ctx) {
           ctx.drawImage(img, 0, 0);
+
+          // Try BarcodeDetector first
+          if (barcodeDetectorRef.current) {
+            try {
+              const barcodes = await barcodeDetectorRef.current.detect(canvas);
+              if (barcodes && barcodes.length > 0 && barcodes[0].rawValue) {
+                handleDecodedData(barcodes[0].rawValue);
+                return;
+              }
+            } catch (err) {
+              console.warn('Image BarcodeDetector notice:', err);
+            }
+          }
+
+          // Fallback to jsQR
           const imageData = ctx.getImageData(0, 0, img.width, img.height);
           const code = jsQR(imageData.data, imageData.width, imageData.height, {
             inversionAttempts: 'attemptBoth',
@@ -367,6 +509,7 @@ export const FrontDeskScannerModal: React.FC<FrontDeskScannerModalProps> = ({
             handleDecodedData(code.data);
           } else {
             playErrorBuzz();
+            showToast('Tidak dapat mendeteksi kode QR atau barcode pada gambar yang diunggah.', 'error');
             setScanError('Tidak dapat mendeteksi kode QR atau barcode pada gambar yang diunggah. Pastikan foto kartu jelas dan terang.');
           }
         }
@@ -845,7 +988,7 @@ export const FrontDeskScannerModal: React.FC<FrontDeskScannerModalProps> = ({
             </div>
 
             {/* Staff Actions */}
-            <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 pt-1">
+            <div className="grid grid-cols-2 sm:grid-cols-5 gap-2 pt-1">
               <button
                 type="button"
                 onClick={() => {
@@ -855,7 +998,7 @@ export const FrontDeskScannerModal: React.FC<FrontDeskScannerModalProps> = ({
                 className="py-2.5 px-3 bg-[#00A651] hover:bg-[#008f45] text-white rounded-xl text-xs font-bold flex items-center justify-center gap-2 shadow-xs transition-colors cursor-pointer"
               >
                 <BedDouble className="w-3.5 h-3.5" />
-                <span>Check-In Stay</span>
+                <span>Check-In</span>
               </button>
 
               <button
@@ -870,6 +1013,20 @@ export const FrontDeskScannerModal: React.FC<FrontDeskScannerModalProps> = ({
                 <span>Catat Belanja</span>
               </button>
 
+              {onOpenVoucherScanner && (
+                <button
+                  type="button"
+                  onClick={() => {
+                    onClose();
+                    onOpenVoucherScanner(selectedMember);
+                  }}
+                  className="py-2.5 px-3 bg-amber-600 hover:bg-amber-700 text-white rounded-xl text-xs font-bold flex items-center justify-center gap-2 shadow-xs transition-colors cursor-pointer"
+                >
+                  <Ticket className="w-3.5 h-3.5" />
+                  <span>Redeem Voucher</span>
+                </button>
+              )}
+
               <button
                 type="button"
                 onClick={() => {
@@ -879,7 +1036,7 @@ export const FrontDeskScannerModal: React.FC<FrontDeskScannerModalProps> = ({
                 className="py-2.5 px-3 bg-white hover:bg-stone-100 text-stone-800 border border-stone-300 rounded-xl text-xs font-bold flex items-center justify-center gap-2 shadow-xs transition-colors cursor-pointer"
               >
                 <Coins className="w-3.5 h-3.5 text-[#C5A869]" />
-                <span>Sesuaikan Poin</span>
+                <span>Poin</span>
               </button>
 
               <button
@@ -891,7 +1048,7 @@ export const FrontDeskScannerModal: React.FC<FrontDeskScannerModalProps> = ({
                 className="py-2.5 px-3 bg-white hover:bg-stone-100 text-stone-800 border border-stone-300 rounded-xl text-xs font-bold flex items-center justify-center gap-2 shadow-xs transition-colors cursor-pointer"
               >
                 <UserCheck className="w-3.5 h-3.5 text-stone-500" />
-                <span>Detail Profil</span>
+                <span>Profil</span>
               </button>
             </div>
           </div>

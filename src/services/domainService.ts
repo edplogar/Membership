@@ -1,3 +1,5 @@
+import { apiFetch } from './apiClient';
+
 export const MEMBER_CUSTOM_DOMAIN = 'member.lombokgardenhotel.com';
 export const HOTEL_OFFICIAL_NAME = 'Lombok Garden Hotel';
 export const FIRESTORE_DATABASE_ID = 'ai-studio-lombokgardenhote-6c919a5f-b175-40b5-b5a7-13f33d1558ca';
@@ -128,14 +130,11 @@ export async function fetchServerDomainStatus(): Promise<DomainSyncInfo> {
   };
 
   try {
-    const res = await fetch('/api/domain/status', {
-      headers: { 'Accept': 'application/json' },
-    });
-    if (res.ok) {
-      const data = await res.json();
+    const { response, parsed } = await apiFetch('/api/domain/status');
+    if (response.ok && parsed.isJson && parsed.data) {
       return {
         ...fallbackInfo,
-        ...data,
+        ...parsed.data,
       };
     }
   } catch {

@@ -16,16 +16,24 @@ const isProd = process.env.NODE_ENV === 'production';
 // Enable trust proxy for custom subdomains like member.lombokgardenhotel.com
 app.set('trust proxy', true);
 
-// CORS and Preflight Request Headers
+// Universal CORS and Preflight Request Headers for Custom Subdomains & AI Studio Preview
 app.use((req: Request, res: Response, next) => {
-  res.setHeader('Access-Control-Allow-Origin', '*');
-  res.setHeader('Access-Control-Allow-Methods', 'GET, POST, PUT, DELETE, OPTIONS');
-  res.setHeader('Access-Control-Allow-Headers', 'Content-Type, Authorization, x-api-key, api-key, X-Requested-With');
+  const origin = req.headers.origin || '*';
+  res.setHeader('Access-Control-Allow-Origin', origin);
+  res.setHeader('Access-Control-Allow-Methods', 'GET, POST, PUT, DELETE, OPTIONS, PATCH');
+  res.setHeader('Access-Control-Allow-Headers', 'Content-Type, Authorization, x-api-key, api-key, X-Requested-With, Accept, Origin');
+  res.setHeader('Access-Control-Max-Age', '86400');
+  res.setHeader('Vary', 'Origin');
+
   if (req.method === 'OPTIONS') {
-    return res.sendStatus(200);
+    return res.status(200).end();
   }
   next();
 });
+
+// JSON and URL-encoded body parsers with generous limits
+app.use(express.json({ limit: '15mb' }));
+app.use(express.urlencoded({ extended: true, limit: '15mb' }));
 
 // Helper to determine active base URL
 const getAppBaseUrl = (req: Request): string => {
@@ -116,7 +124,7 @@ app.post('/api/whatsapp/send', async (req: Request, res: Response) => {
   }
 
   const currentBaseUrl = getAppBaseUrl(req);
-  const endpointUrl = (apiUrl || 'https://api.ping.co.id/v1').replace(/\/+$/, '');
+  const endpointUrl = (apiUrl || 'https://ping.co.id/api/v1').replace(/\/+$/, '');
   const token = (apiKey || 'ping_live_8912734190abcdef88912').trim();
 
   // Format recipient phone: extract pure digits
@@ -324,7 +332,7 @@ app.post('/api/whatsapp/send', async (req: Request, res: Response) => {
 app.post('/api/whatsapp/test-connection', async (req: Request, res: Response) => {
   const { apiKey, apiUrl, deviceId } = req.body;
   const token = (apiKey || '').trim();
-  const endpointUrl = (apiUrl || 'https://api.ping.co.id/v1').replace(/\/+$/, '');
+  const endpointUrl = (apiUrl || 'https://ping.co.id/api/v1').replace(/\/+$/, '');
 
   const startTime = Date.now();
 

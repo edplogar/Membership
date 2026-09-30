@@ -8,6 +8,11 @@ import {
   fetchServerEmailStats,
 } from '../../services/emailService';
 import {
+  checkBackendConnection,
+  CLOUD_RUN_PREVIEW_URL,
+  isNativeCloudRunHost,
+} from '../../services/apiClient';
+import {
   Mail,
   Send,
   Settings,
@@ -1576,6 +1581,47 @@ export const EmailSystemHub: React.FC<EmailSystemHubProps> = ({ onNavigate }) =>
                 <div className="flex items-center gap-2">
                   <Check className="w-3.5 h-3.5 text-[#00A651]" />
                   <span>Reset Password via Email: <strong>{emailConfig.autoSendPasswordResetEmail ? 'Aktif' : 'Nonaktif'}</strong></span>
+                </div>
+              </div>
+            </div>
+
+            {/* Subdomain & Cloud Run Bridge Status Card */}
+            <div className="p-5 bg-white rounded-2xl border border-stone-200 shadow-xs space-y-3">
+              <div className="flex items-center justify-between pb-2 border-b border-stone-100">
+                <div className="flex items-center gap-2">
+                  <Server className="w-4 h-4 text-emerald-600" />
+                  <h4 className="text-xs font-bold text-stone-900 uppercase tracking-wide">
+                    Jembatan API Subdomain Live Web
+                  </h4>
+                </div>
+                <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-emerald-100 text-emerald-800 flex items-center gap-1">
+                  <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse" />
+                  <span>Auto-Routing Aktif</span>
+                </span>
+              </div>
+
+              <p className="text-[11px] text-stone-600 leading-relaxed">
+                Aplikasi dilengkapi fitur <strong>Multi-Host Fallback</strong> otomatis. Jika aplikasi diakses via subdomain kustom (seperti <em>member.lombokgardenhotel.com</em>) yang di-host di server statis tanpa Node.js, seluruh panggilan API email & WhatsApp otomatis dialihkan ke backend Cloud Run resmi yang aktif 24/7.
+              </p>
+
+              <div className="p-3 bg-stone-50 rounded-xl border border-stone-200 text-xs space-y-2">
+                <div className="flex items-center justify-between">
+                  <span className="text-stone-500">Domain Browser Aktif:</span>
+                  <span className="font-mono font-semibold text-stone-800">
+                    {typeof window !== 'undefined' ? window.location.origin : 'https://member.lombokgardenhotel.com'}
+                  </span>
+                </div>
+                <div className="flex items-center justify-between">
+                  <span className="text-stone-500">Cloud Run Backend Gateway:</span>
+                  <span className="font-mono text-[11px] text-emerald-700 truncate max-w-[200px]" title={CLOUD_RUN_PREVIEW_URL}>
+                    {CLOUD_RUN_PREVIEW_URL.replace('https://', '')}
+                  </span>
+                </div>
+                <div className="flex items-center justify-between">
+                  <span className="text-stone-500">Tipe Akses:</span>
+                  <span className="font-semibold text-stone-700">
+                    {!isNativeCloudRunHost() ? 'Custom Subdomain (Auto-Bridge ke Cloud Run)' : 'Direct AI Studio Host'}
+                  </span>
                 </div>
               </div>
             </div>

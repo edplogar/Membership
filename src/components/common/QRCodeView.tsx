@@ -1,4 +1,5 @@
-import React, { useMemo } from 'react';
+import React, { useState, useEffect } from 'react';
+import QRCode from 'qrcode';
 
 interface QRCodeViewProps {
   value: string;
@@ -8,9 +9,9 @@ interface QRCodeViewProps {
 }
 
 /**
- * Deterministic pure SVG QR Code generator.
- * Produces crisp, standard QR-like visual matrix for membership cards and vouchers
- * without external network or CDN dependencies.
+ * High-precision ISO/IEC 18004 compliant QR Code generator using standard qrcode engine.
+ * Generates true, universally scannable QR codes that any barcode scanner gun,
+ * webcam, or mobile camera can read instantly.
  */
 export const QRCodeView: React.FC<QRCodeViewProps> = ({
   value,
@@ -18,117 +19,75 @@ export const QRCodeView: React.FC<QRCodeViewProps> = ({
   className = '',
   showLogo = true,
 }) => {
-  // Generate deterministic pseudo-random 25x25 matrix seeded by string value
-  const matrix = useMemo(() => {
-    const n = 25;
-    const grid: boolean[][] = Array.from({ length: n }, () => Array(n).fill(false));
+  const [qrDataUrl, setQrDataUrl] = useState<string>('');
+  const [hasError, setHasError] = useState(false);
 
-    // Simple hash function for seed
-    let hash = 0;
-    for (let i = 0; i < value.length; i++) {
-      hash = (hash << 5) - hash + value.charCodeAt(i);
-      hash |= 0;
+  useEffect(() => {
+    let isMounted = true;
+    if (!value) {
+      setQrDataUrl('');
+      return;
     }
 
-    const pseudoRandom = (seed: number) => {
-      const x = Math.sin(seed) * 10000;
-      return x - Math.floor(x);
-    };
-
-    // Draw position detection finder patterns (7x7 at 3 corners)
-    const drawFinderPattern = (r0: number, c0: number) => {
-      for (let r = 0; r < 7; r++) {
-        for (let c = 0; c < 7; c++) {
-          if (
-            r === 0 ||
-            r === 6 ||
-            c === 0 ||
-            c === 6 ||
-            (r >= 2 && r <= 4 && c >= 2 && c <= 4)
-          ) {
-            grid[r0 + r][c0 + c] = true;
-          } else {
-            grid[r0 + r][c0 + c] = false;
-          }
+    QRCode.toDataURL(value, {
+      width: size * 2, // 2x resolution for retina sharpness
+      margin: 1,
+      color: {
+        dark: '#072417', // Lombok Garden Hotel Forest Green
+        light: '#FFFFFF',
+      },
+      errorCorrectionLevel: showLogo ? 'H' : 'M', // High error correction when embedding logo
+    })
+      .then((url) => {
+        if (isMounted) {
+          setQrDataUrl(url);
+          setHasError(false);
         }
-      }
+      })
+      .catch((err) => {
+        console.error('Failed to generate real QR Code:', err);
+        if (isMounted) setHasError(true);
+      });
+
+    return () => {
+      isMounted = false;
     };
+  }, [value, size, showLogo]);
 
-    drawFinderPattern(0, 0); // Top-left
-    drawFinderPattern(0, n - 7); // Top-right
-    drawFinderPattern(n - 7, 0); // Bottom-left
+  if (hasError || !qrDataUrl) {
+    return (
+      <div
+        style={{ width: size, height: size }}
+        className={`bg-white rounded-xl border border-stone-200 flex items-center justify-center p-2 ${className}`}
+      >
+        <span className="text-[10px] text-stone-400 font-mono text-center">
+          {value || 'Membuat QR...'}
+        </span>
+      </div>
+    );
+  }
 
-    // Timing patterns
-    for (let i = 8; i < n - 8; i++) {
-      grid[6][i] = i % 2 === 0;
-      grid[i][6] = i % 2 === 0;
-    }
-
-    // Alignment pattern near bottom right
-    const ar = n - 9;
-    const ac = n - 9;
-    for (let r = 0; r < 5; r++) {
-      for (let c = 0; c < 5; c++) {
-        grid[ar + r][ac + c] =
-          r === 0 || r === 4 || c === 0 || c === 4 || (r === 2 && c === 2);
-      }
-    }
-
-    // Fill data modules based on string hash
-    for (let r = 0; r < n; r++) {
-      for (let c = 0; c < n; c++) {
-        // Skip finder patterns and margins
-        const isFinderTL = r < 8 && c < 8;
-        const isFinderTR = r < 8 && c >= n - 8;
-        const isFinderBL = r >= n - 8 && c < 8;
-        const isCenter = r >= 10 && r <= 14 && c >= 10 && c <= 14;
-
-        if (!isFinderTL && !isFinderTR && !isFinderBL && !isCenter) {
-          const pr = pseudoRandom(hash + r * 37 + c * 17);
-          grid[r][c] = pr > 0.48;
-        }
-      }
-    }
-
-    return grid;
-  }, [value]);
-
-  const moduleSize = size / 25;
+  const logoSize = Math.max(22, Math.round(size * 0.22));
 
   return (
     <div
-      className={`relative inline-flex items-center justify-center p-3 bg-white rounded-xl shadow-md border border-stone-200 ${className}`}
-      style={{ width: size + 24, height: size + 24 }}
+      style={{ width: size, height: size }}
+      className={`relative inline-flex items-center justify-center bg-white rounded-xl shadow-xs overflow-hidden select-none ${className}`}
     >
-      <svg
-        width={size}
-        height={size}
-        viewBox="0 0 25 25"
-        className="shape-rendering-crispEdges"
-      >
-        {matrix.map((row, r) =>
-          row.map((col, c) =>
-            col ? (
-              <rect
-                key={`${r}-${c}`}
-                x={c}
-                y={r}
-                width={1.02}
-                height={1.02}
-                fill="#1c1917"
-              />
-            ) : null
-          )
-        )}
-      </svg>
+      <img
+        src={qrDataUrl}
+        alt={`QR Code ${value}`}
+        style={{ width: size, height: size }}
+        className="block object-contain"
+      />
 
-      {/* Center Crest Icon */}
+      {/* Optional Central Logo Badge */}
       {showLogo && (
         <div
-          className="absolute inset-0 m-auto flex items-center justify-center bg-stone-900 text-amber-400 rounded-md shadow-md border-2 border-white"
-          style={{ width: moduleSize * 5, height: moduleSize * 5 }}
+          style={{ width: logoSize, height: logoSize }}
+          className="absolute inset-auto bg-[#072417] text-[#C5A869] rounded-lg border-2 border-white shadow-sm flex items-center justify-center pointer-events-none"
         >
-          <span className="text-[10px] font-bold font-serif-luxury tracking-tighter">
+          <span className="font-serif font-bold text-[10px] sm:text-xs tracking-tighter">
             LGH
           </span>
         </div>

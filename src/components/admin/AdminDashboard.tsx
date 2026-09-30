@@ -15,18 +15,21 @@ import {
   BedDouble,
   ChevronRight,
   ArrowUpRight,
+  ScanLine,
 } from 'lucide-react';
 
 interface AdminDashboardProps {
   onNavigate: (tab: string) => void;
   onOpenScanner: () => void;
   onOpenAddMember: () => void;
+  onOpenVoucherScanner?: () => void;
 }
 
 export const AdminDashboard: React.FC<AdminDashboardProps> = ({
   onNavigate,
   onOpenScanner,
   onOpenAddMember,
+  onOpenVoucherScanner,
 }) => {
   const {
     members,
@@ -94,11 +97,21 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
         <div className="flex items-center gap-2.5">
           <button
             onClick={onOpenScanner}
-            className="px-4 py-2.5 bg-stone-900 hover:bg-stone-800 text-stone-100 rounded-xl text-xs font-semibold flex items-center gap-2 shadow-xs transition-colors"
+            className="px-4 py-2.5 bg-stone-900 hover:bg-stone-800 text-stone-100 rounded-xl text-xs font-semibold flex items-center gap-2 shadow-xs transition-colors cursor-pointer"
           >
             <QrCode className="w-4 h-4 text-amber-400" />
             <span>Pindai QR Tamu</span>
           </button>
+
+          {onOpenVoucherScanner && (
+            <button
+              onClick={onOpenVoucherScanner}
+              className="px-4 py-2.5 bg-amber-600 hover:bg-amber-700 text-white rounded-xl text-xs font-bold flex items-center gap-2 shadow-xs transition-colors cursor-pointer"
+            >
+              <Ticket className="w-4 h-4" />
+              <span>Redeem Voucher</span>
+            </button>
+          )}
 
           <button
             onClick={onOpenAddMember}

@@ -1,4 +1,5 @@
 import { EmailSystemConfig, EmailMessageLog, Member, MembershipTier, User } from '../types';
+import { apiFetch } from './apiClient';
 
 export const INITIAL_EMAIL_CONFIG: EmailSystemConfig = {
   defaultSenderEmail: 'membership@lombokgardenhotel.com',
@@ -336,14 +337,12 @@ export async function sendWelcomeEmail(
   };
 
   try {
-    const res = await fetch('/api/email/send', {
+    const { response, parsed } = await apiFetch('/api/email/send', {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(payload),
     });
 
-    const parsed = await safeParseResponse(res);
-    const data = parsed.data || {};
+    const data = parsed.isJson ? parsed.data : {};
 
     return {
       id: `eml_${Date.now()}_${Math.random().toString(36).substring(2, 6)}`,
@@ -351,11 +350,11 @@ export async function sendWelcomeEmail(
       recipientName: member.fullName,
       subject,
       type: 'welcome',
-      status: 'delivered',
+      status: (response.ok && data?.success !== false) ? 'delivered' : 'sent',
       senderEmail: config.defaultSenderEmail,
       timestamp: new Date().toISOString(),
       previewText: `Selamat Bergabung ${member.fullName} (${member.membershipNumber})`,
-      errorMessage: data.error || undefined,
+      errorMessage: data?.error || undefined,
     };
   } catch (err: unknown) {
     const errMsg = err instanceof Error ? err.message : String(err);
@@ -404,14 +403,12 @@ export async function sendPasswordResetEmail(
   };
 
   try {
-    const res = await fetch('/api/email/reset-password', {
+    const { response, parsed } = await apiFetch('/api/email/reset-password', {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(payload),
     });
 
-    const parsed = await safeParseResponse(res);
-    const data = parsed.data || {};
+    const data = parsed.isJson ? parsed.data : {};
 
     const log: EmailMessageLog = {
       id: `eml_${Date.now()}_${Math.random().toString(36).substring(2, 6)}`,
@@ -419,13 +416,13 @@ export async function sendPasswordResetEmail(
       recipientName: recipient.name,
       subject,
       type: 'password_reset',
-      status: 'delivered',
+      status: (response.ok && data?.success !== false) ? 'delivered' : 'sent',
       senderEmail: config.defaultSenderEmail,
       timestamp: new Date().toISOString(),
       resetToken: generatedToken,
       otpCode: generatedOtp,
       previewText: `Instruksi reset kata sandi dikirim ke ${recipient.email}. Kode OTP: ${generatedOtp}`,
-      errorMessage: data.error || undefined,
+      errorMessage: data?.error || undefined,
     };
 
     return {
@@ -462,23 +459,21 @@ export async function sendPasswordResetEmail(
   }
 }
 
-// Test SMTP or Email Configuration
+// Test SMTP or Email Configuration with Multi-Host Subdomain Fallback
 export async function testEmailConnection(
   config: EmailSystemConfig,
   testRecipientEmail: string
 ): Promise<{ success: boolean; message: string; log?: EmailMessageLog }> {
   const targetEmail = testRecipientEmail.trim() || config.defaultSenderEmail || 'edp.logar@gmail.com';
   try {
-    const res = await fetch('/api/email/test-connection', {
+    const { response, parsed } = await apiFetch('/api/email/test-connection', {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
         config,
         testRecipient: targetEmail,
       }),
     });
 
-    const parsed = await safeParseResponse(res);
     if (parsed.isJson && parsed.data && typeof parsed.data.success === 'boolean') {
       return parsed.data;
     }
@@ -525,9 +520,8 @@ export async function testEmailConnection(
 // Fetch recent logs from backend server
 export async function fetchServerEmailLogs(): Promise<EmailMessageLog[]> {
   try {
-    const res = await fetch('/api/email/logs');
-    const parsed = await safeParseResponse(res);
-    if (parsed.isJson && Array.isArray(parsed.data?.logs)) {
+    const { response, parsed } = await apiFetch('/api/email/logs');
+    if (response.ok && parsed.isJson && Array.isArray(parsed.data?.logs)) {
       return parsed.data.logs;
     }
   } catch (e) {
@@ -548,9 +542,8 @@ export async function fetchServerEmailStats(): Promise<{
   lastDispatchedAt: string | null;
 } | null> {
   try {
-    const res = await fetch('/api/email/stats');
-    const parsed = await safeParseResponse(res);
-    if (parsed.isJson && parsed.data?.success) {
+    const { response, parsed } = await apiFetch('/api/email/stats');
+    if (response.ok && parsed.isJson && parsed.data?.success) {
       return parsed.data;
     }
   } catch (e) {
@@ -565,12 +558,10 @@ export async function resendDispatchedEmail(
   config: EmailSystemConfig
 ): Promise<{ success: boolean; message: string; log?: EmailMessageLog }> {
   try {
-    const res = await fetch('/api/email/resend', {
+    const { response, parsed } = await apiFetch('/api/email/resend', {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ logId, config }),
     });
-    const parsed = await safeParseResponse(res);
     if (parsed.isJson && parsed.data) {
       return parsed.data;
     }
@@ -590,8 +581,7 @@ export async function resendDispatchedEmail(
 // Clear all logs on server
 export async function clearServerEmailLogs(): Promise<boolean> {
   try {
-    const res = await fetch('/api/email/clear-logs', { method: 'POST' });
-    const parsed = await safeParseResponse(res);
+    const { response, parsed } = await apiFetch('/api/email/clear-logs', { method: 'POST' });
     return parsed.isJson && parsed.data?.success;
   } catch {
     return false;
@@ -634,9 +624,8 @@ export async function sendTierUpgradeEmail(
 </html>`;
 
   try {
-    const res = await fetch('/api/email/send', {
+    const { response, parsed } = await apiFetch('/api/email/send', {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
         to: member.email,
         recipientName: member.fullName,
@@ -648,7 +637,6 @@ export async function sendTierUpgradeEmail(
         config,
       }),
     });
-    const parsed = await safeParseResponse(res);
     if (parsed.isJson && parsed.data?.log) {
       return parsed.data.log;
     }
@@ -706,9 +694,8 @@ export async function sendPointUpdateEmail(
 </html>`;
 
   try {
-    const res = await fetch('/api/email/send', {
+    const { response, parsed } = await apiFetch('/api/email/send', {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
         to: member.email,
         recipientName: member.fullName,
@@ -720,7 +707,6 @@ export async function sendPointUpdateEmail(
         config,
       }),
     });
-    const parsed = await safeParseResponse(res);
     if (parsed.isJson && parsed.data?.log) {
       return parsed.data.log;
     }
@@ -770,9 +756,8 @@ export async function sendMemberCustomNotificationEmail(
 </html>`;
 
   try {
-    const res = await fetch('/api/email/send', {
+    const { response, parsed } = await apiFetch('/api/email/send', {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
         to,
         recipientName,
@@ -783,7 +768,6 @@ export async function sendMemberCustomNotificationEmail(
         config,
       }),
     });
-    const parsed = await safeParseResponse(res);
     if (parsed.isJson && parsed.data?.log) {
       return parsed.data.log;
     }

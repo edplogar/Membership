@@ -44,6 +44,7 @@ import {
   simulateWebhookIncoming,
   normalizeIndonesianPhone,
 } from '../../services/pingWhatsAppService';
+import { CLOUD_RUN_PREVIEW_URL } from '../../services/apiClient';
 import { WhatsAppMessageLog, WhatsAppWebhookRule } from '../../types';
 
 export const WhatsAppCRMHub: React.FC = () => {
@@ -105,14 +106,17 @@ export const WhatsAppCRMHub: React.FC = () => {
 
   // Config local state
   const [apiKey, setApiKey] = useState(whatsappConfig.apiKey || 'ping_live_8912734190abcdef88912');
-  const [apiUrl, setApiUrl] = useState(whatsappConfig.apiUrl || 'https://api.ping.co.id/v1');
+  const [apiUrl, setApiUrl] = useState(whatsappConfig.apiUrl || 'https://ping.co.id/api/v1');
   const [senderPhone, setSenderPhone] = useState(whatsappConfig.senderPhone || '+62 812-370-112');
   const [deviceId, setDeviceId] = useState(whatsappConfig.deviceId || 'lgh_bot_device_01');
   const [accountEmail, setAccountEmail] = useState(whatsappConfig.accountEmail || 'it.management@lombokgardenhotel.com');
   const [deviceName, setDeviceName] = useState(whatsappConfig.deviceName || 'Lombok Garden Hotel CRM Bot');
 
   const currentOrigin = typeof window !== 'undefined' ? window.location.origin : 'https://member.lombokgardenhotel.com';
-  const liveWebhookEndpoint = `${currentOrigin}/api/whatsapp/webhook`;
+  const cloudRunWebhookEndpoint = `${CLOUD_RUN_PREVIEW_URL}/api/whatsapp/webhook`;
+  const liveWebhookEndpoint = currentOrigin.includes('run.app') || currentOrigin.includes('localhost')
+    ? `${currentOrigin}/api/whatsapp/webhook`
+    : cloudRunWebhookEndpoint;
 
   // Guide toggle and copy state
   const [showWebhookGuide, setShowWebhookGuide] = useState(true);
@@ -2559,30 +2563,32 @@ export const WhatsAppCRMHub: React.FC = () => {
 
               <div>
                 <label className="block text-xs font-semibold text-stone-700 mb-1">
-                  Webhook Inbound Endpoint URL (Callback)
+                  Webhook Inbound Endpoint URL (Callback untuk ping.co.id)
                 </label>
-                <div className="flex gap-2">
-                  <input
-                    type="text"
-                    readOnly
-                    value={liveWebhookEndpoint}
-                    className="flex-1 px-3.5 py-2.5 rounded-xl border border-stone-300 text-xs font-mono bg-stone-50 focus:outline-none"
-                  />
-                  <button
-                    type="button"
-                    onClick={() => {
-                      navigator.clipboard.writeText(liveWebhookEndpoint);
-                      showToast('Webhook URL disalin ke clipboard', 'info');
-                    }}
-                    className="px-3 py-2 border border-stone-300 rounded-xl hover:bg-stone-50 text-stone-600 text-xs font-semibold flex items-center gap-1.5 cursor-pointer"
-                  >
-                    <Copy className="w-3.5 h-3.5" />
-                    <span>Salin</span>
-                  </button>
+                <div className="space-y-2">
+                  <div className="flex gap-2">
+                    <input
+                      type="text"
+                      readOnly
+                      value={liveWebhookEndpoint}
+                      className="flex-1 px-3.5 py-2.5 rounded-xl border border-stone-300 text-xs font-mono bg-stone-50 focus:outline-none"
+                    />
+                    <button
+                      type="button"
+                      onClick={() => {
+                        navigator.clipboard.writeText(liveWebhookEndpoint);
+                        showToast('Webhook URL disalin ke clipboard', 'info');
+                      }}
+                      className="px-3.5 py-2 bg-emerald-700 hover:bg-emerald-800 text-white rounded-xl text-xs font-semibold flex items-center gap-1.5 cursor-pointer shadow-xs transition-colors shrink-0"
+                    >
+                      <Copy className="w-3.5 h-3.5" />
+                      <span>Salin URL Webhook</span>
+                    </button>
+                  </div>
+                  <div className="p-2.5 bg-emerald-50/70 border border-emerald-200/80 rounded-xl text-[11px] text-emerald-900 leading-relaxed">
+                    💡 <strong>Catatan untuk Subdomain Live Web:</strong> URL di atas otomatis mengarahkan callback ping.co.id ke backend Cloud Run resmi yang aktif 24/7, sehingga respon otomatis bot WhatsApp selalu bekerja tanpa terpengaruh hosting web statis.
+                  </div>
                 </div>
-                <p className="text-[11px] text-stone-400 mt-1">
-                  Tempel URL ini pada pengaturan <strong>Webhook Callback</strong> di portal ping.co.id untuk menerima respon balasan otomatis.
-                </p>
               </div>
 
               <div className="pt-2 flex items-center justify-between border-t border-stone-100">

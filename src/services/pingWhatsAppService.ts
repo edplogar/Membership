@@ -6,6 +6,7 @@ import {
   Member,
   MembershipTier,
 } from '../types';
+import { apiFetch, CLOUD_RUN_PREVIEW_URL } from './apiClient';
 
 export const DEFAULT_WEBHOOK_RULES: WhatsAppWebhookRule[] = [
   {
@@ -69,7 +70,7 @@ export function getBaseAppUrl(): string {
 
 export const INITIAL_PING_CONFIG: PingCoIdWhatsAppConfig = {
   apiKey: 'ping_live_8912734190abcdef88912',
-  apiUrl: 'https://api.ping.co.id/v1',
+  apiUrl: 'https://ping.co.id/api/v1',
   senderPhone: '+62 812-370-112',
   deviceId: 'lgh_bot_device_01',
   accountEmail: 'it.management@lombokgardenhotel.com',
@@ -165,11 +166,10 @@ export async function testPingConnection(config: PingCoIdWhatsAppConfig): Promis
     };
   }
 
-  // Call server proxy endpoint to avoid CORS issues
+  // Call server proxy endpoint with multi-host fallback to avoid CORS & subdomain routing issues
   try {
-    const res = await fetch('/api/whatsapp/test-connection', {
+    const { response, parsed } = await apiFetch('/api/whatsapp/test-connection', {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
         apiKey: config.apiKey,
         apiUrl: config.apiUrl,
@@ -177,8 +177,8 @@ export async function testPingConnection(config: PingCoIdWhatsAppConfig): Promis
       }),
     });
 
-    if (res.ok) {
-      const data = await res.json();
+    if (response.ok && parsed.isJson && parsed.data) {
+      const data = parsed.data;
       return {
         success: data.success ?? true,
         message: data.message || 'Koneksi ke server ping.co.id berhasil.',
@@ -199,7 +199,15 @@ export async function testPingConnection(config: PingCoIdWhatsAppConfig): Promis
 }
 
 /**
- * Dispatches a WhatsApp Message via server proxy or direct gateway
+ * Generates a direct WhatsApp Click-to-Chat URL as manual fallback
+ */
+export function getDirectWhatsAppClickUrl(phone: string, text: string): string {
+  const { raw } = normalizeIndonesianPhone(phone);
+  return `https://api.whatsapp.com/send?phone=${raw}&text=${encodeURIComponent(text)}`;
+}
+
+/**
+ * Dispatches a WhatsApp Message via server proxy or direct gateway with multi-host subdomain support
  */
 export async function sendWhatsAppMessageViaPing(
   recipientPhone: string,
@@ -211,11 +219,10 @@ export async function sendWhatsAppMessageViaPing(
 ): Promise<WhatsAppMessageLog> {
   const { formatted, raw } = normalizeIndonesianPhone(recipientPhone);
 
-  // Call server-side proxy route to avoid CORS
+  // Call server-side proxy route with automatic Cloud Run backend fallback
   try {
-    const res = await fetch('/api/whatsapp/send', {
+    const { response, parsed } = await apiFetch('/api/whatsapp/send', {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
         apiKey: config.apiKey,
         apiUrl: config.apiUrl,
@@ -227,8 +234,8 @@ export async function sendWhatsAppMessageViaPing(
       }),
     });
 
-    const data = await res.json().catch(() => null);
-    if (res.ok && data && (data.success !== false)) {
+    const data = parsed.isJson ? parsed.data : null;
+    if (response.ok && data && (data.success !== false)) {
       return {
         id: data.messageId || `ping_${Date.now()}_${Math.random().toString(36).substring(2, 6)}`,
         recipientPhone: formatted || recipientPhone,
@@ -306,9 +313,8 @@ export async function simulateWebhookIncoming(
   replyMessage?: string;
 }> {
   try {
-    const res = await fetch('/api/whatsapp/webhook', {
+    const { response, parsed } = await apiFetch('/api/whatsapp/webhook', {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
         event: 'message.received',
         from: fromPhone,
@@ -317,8 +323,8 @@ export async function simulateWebhookIncoming(
       }),
     });
 
-    if (res.ok) {
-      return await res.json();
+    if (response.ok && parsed.isJson && parsed.data) {
+      return parsed.data;
     }
   } catch {
     // Fallback rule matcher in client

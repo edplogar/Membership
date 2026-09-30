@@ -2,6 +2,7 @@ import { initializeApp } from 'firebase/app';
 import { getAuth, GoogleAuthProvider, signInWithPopup, sendPasswordResetEmail } from 'firebase/auth';
 import { getFirestore, doc, getDocFromServer } from 'firebase/firestore';
 import firebaseConfig from '../../firebase-applet-config.json';
+import { apiFetch } from './apiClient';
 
 const app = initializeApp(firebaseConfig);
 export const db = getFirestore(app, firebaseConfig.firestoreDatabaseId);
@@ -32,9 +33,8 @@ export async function sendFirebasePasswordResetEmail(
   // 2. Dispatch to backend proxy (/api/auth/send-reset-email) to record audit log & guarantee delivery instruction
   try {
     const origin = typeof window !== 'undefined' && window.location.origin ? window.location.origin : 'https://member.lombokgardenhotel.com';
-    await fetch('/api/auth/send-reset-email', {
+    await apiFetch('/api/auth/send-reset-email', {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
         email: cleanEmail,
         name: extra?.name || cleanEmail.split('@')[0],

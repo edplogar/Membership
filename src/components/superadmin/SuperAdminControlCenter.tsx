@@ -625,37 +625,70 @@ export const SuperAdminControlCenter: React.FC<SuperAdminControlCenterProps> = (
             </div>
 
             {/* Webhook Callback Info Row */}
-            <div className="p-3.5 bg-stone-950 rounded-xl border border-stone-800 flex flex-col sm:flex-row sm:items-center justify-between gap-3 text-xs">
-              <div className="space-y-1">
-                <div className="flex items-center gap-2 text-emerald-400 font-bold">
-                  <Globe className="w-4 h-4" />
-                  <span>Webhook Callback URL (Untuk Menu "Rule / Aturan Webhook" di ping.co.id):</span>
-                </div>
-                <div className="font-mono text-[11px] text-stone-300 break-all select-all">
-                  {typeof window !== 'undefined' ? `${window.location.origin}/api/whatsapp/webhook` : 'https://membership.lombokgardenhotel.com/api/whatsapp/webhook'}
-                </div>
-                <p className="text-[10px] text-stone-400">
-                  💡 Notifikasi otomatis hotel (Welcome Card, Saldo Poin, Naik Tier) <strong>sudah 100% aktif via API</strong> tanpa wajib webhook.
-                </p>
+            <div className="p-4 bg-stone-950 rounded-xl border border-stone-800 space-y-3 text-xs">
+              <div className="flex items-center gap-2 text-emerald-400 font-bold">
+                <Globe className="w-4 h-4" />
+                <span>Webhook Callback URL (Untuk Menu "Rule / Aturan Webhook" di ping.co.id):</span>
               </div>
 
-              <div className="flex items-center gap-2 shrink-0">
+              {/* Option A: Cloud Run Official URL (Guaranteed 24/7) */}
+              <div className="p-3 bg-stone-900/90 rounded-lg border border-emerald-500/30 flex flex-col sm:flex-row sm:items-center justify-between gap-2.5">
+                <div className="min-w-0">
+                  <div className="text-[10px] text-emerald-400 font-bold uppercase tracking-wider">
+                    Pilihan Utama (Direkomendasikan untuk Custom Subdomain / Live Web):
+                  </div>
+                  <div className="font-mono text-[11px] text-white truncate select-all">
+                    https://ais-pre-xla2nc2xa6a4dyfmg3b7sm-882338726390.asia-southeast1.run.app/api/whatsapp/webhook
+                  </div>
+                  <div className="text-[10px] text-stone-400">
+                    Langsung terhubung ke backend server Cloud Run 24/7 tanpa bergantung pada DNS/hosting lokal.
+                  </div>
+                </div>
                 <button
                   type="button"
                   onClick={() => {
-                    const url = typeof window !== 'undefined' ? `${window.location.origin}/api/whatsapp/webhook` : 'https://membership.lombokgardenhotel.com/api/whatsapp/webhook';
-                    navigator.clipboard.writeText(url);
-                    showToast('URL Webhook berhasil disalin!', 'success');
+                    navigator.clipboard.writeText('https://ais-pre-xla2nc2xa6a4dyfmg3b7sm-882338726390.asia-southeast1.run.app/api/whatsapp/webhook');
+                    showToast('URL Webhook Cloud Run berhasil disalin!', 'success');
                   }}
-                  className="px-3 py-1.5 rounded-lg bg-stone-800 hover:bg-stone-700 text-stone-200 text-xs font-semibold flex items-center gap-1.5 transition-colors cursor-pointer"
+                  className="px-3 py-1.5 rounded-lg bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-semibold flex items-center gap-1.5 transition-colors cursor-pointer shrink-0"
                 >
-                  <Copy className="w-3.5 h-3.5 text-emerald-400" />
-                  <span>Salin URL</span>
+                  <Copy className="w-3.5 h-3.5" />
+                  <span>Salin Cloud URL</span>
                 </button>
+              </div>
+
+              {/* Option B: Subdomain URL */}
+              <div className="p-2.5 bg-stone-900/40 rounded-lg border border-stone-800 flex flex-col sm:flex-row sm:items-center justify-between gap-2">
+                <div className="min-w-0">
+                  <div className="text-[10px] text-stone-400 font-semibold">
+                    Alternatif Subdomain Sendiri:
+                  </div>
+                  <div className="font-mono text-[11px] text-stone-300 truncate select-all">
+                    {typeof window !== 'undefined' ? `${window.location.origin}/api/whatsapp/webhook` : 'https://member.lombokgardenhotel.com/api/whatsapp/webhook'}
+                  </div>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => {
+                    const url = typeof window !== 'undefined' ? `${window.location.origin}/api/whatsapp/webhook` : 'https://member.lombokgardenhotel.com/api/whatsapp/webhook';
+                    navigator.clipboard.writeText(url);
+                    showToast('URL Webhook Subdomain berhasil disalin!', 'success');
+                  }}
+                  className="px-2.5 py-1 rounded bg-stone-800 hover:bg-stone-700 text-stone-300 text-xs font-medium flex items-center gap-1 transition-colors cursor-pointer shrink-0"
+                >
+                  <Copy className="w-3 h-3 text-stone-400" />
+                  <span>Salin</span>
+                </button>
+              </div>
+
+              <div className="flex items-center justify-between pt-1">
+                <p className="text-[10px] text-stone-400">
+                  💡 Notifikasi otomatis hotel (Welcome Card, Saldo Poin, Naik Tier) <strong>sudah 100% aktif via API</strong> tanpa wajib webhook.
+                </p>
                 <button
                   type="button"
                   onClick={() => onNavigate('super_whatsapp')}
-                  className="px-3 py-1.5 rounded-lg bg-emerald-600/30 hover:bg-emerald-600/40 text-emerald-300 border border-emerald-500/30 text-xs font-semibold flex items-center gap-1.5 transition-colors cursor-pointer"
+                  className="px-3 py-1.5 rounded-lg bg-emerald-600/30 hover:bg-emerald-600/40 text-emerald-300 border border-emerald-500/30 text-xs font-semibold flex items-center gap-1.5 transition-colors cursor-pointer shrink-0"
                 >
                   <span>Panduan Lengkap Webhook</span>
                   <ArrowRight className="w-3.5 h-3.5" />
