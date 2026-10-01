@@ -91,49 +91,50 @@ export const Navbar: React.FC<NavbarProps> = ({
 
   return (
     <header className="sticky top-8 z-30 bg-[#072417]/95 backdrop-blur-md border-b border-[#0e4029] text-stone-100 shadow-md">
-      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 h-16 flex items-center justify-between gap-4">
-        {/* Zone 1: Official Lombok Garden Hotel Logo (Preserving exact shape & #00A651 color) */}
-        <button
-          onClick={() => onTabChange(userRole === 'MEMBER' ? 'dashboard' : userRole === 'ADMIN' ? 'admin_dashboard' : 'super_dashboard')}
-          className="text-left group cursor-pointer focus:outline-hidden py-1"
-          title="Lombok Garden Hotel"
-        >
-          <div className="p-1 px-2.5 bg-white rounded-xl shadow-xs border border-[#00A651]/30 hover:border-[#00A651] transition-all">
-            <LombokGardenLogo variant="horizontal" size="sm" />
+      {/* ROW 1: Brand Logo & Top Operation Actions */}
+      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 h-14 sm:h-16 flex items-center justify-between gap-3">
+        {/* Brand Logo & Portal Tag */}
+        <div className="flex items-center gap-3">
+          <button
+            onClick={() =>
+              onTabChange(
+                userRole === 'MEMBER'
+                  ? 'dashboard'
+                  : userRole === 'ADMIN'
+                  ? 'admin_dashboard'
+                  : 'super_dashboard'
+              )
+            }
+            className="text-left group cursor-pointer focus:outline-hidden py-1"
+            title="Lombok Garden Hotel"
+          >
+            <div className="bg-transparent p-0 border-none shadow-none hover:opacity-90 transition-all flex items-center">
+              <LombokGardenLogo variant="horizontal" size="sm" />
+            </div>
+          </button>
+
+          <div className="hidden md:flex flex-col border-l border-[#0e4029] pl-3">
+            <span className="text-[11px] font-bold text-emerald-300 uppercase tracking-wider font-mono">
+              {userRole === 'SUPER_ADMIN'
+                ? 'Super Admin Hub'
+                : userRole === 'ADMIN'
+                ? 'Hotel Management Portal'
+                : 'Membership & Loyalty Portal'}
+            </span>
+            <span className="text-[10px] text-emerald-100/60">
+              Lombok Garden Hotel Official
+            </span>
           </div>
-        </button>
+        </div>
 
-        {/* Zone 2: 4–6 clean text navigation links */}
-        <nav className="hidden lg:flex items-center gap-6 text-xs sm:text-sm font-medium text-emerald-100/90">
-          {navLinks.map((link) => {
-            const isActive = currentTab === link.id;
-            return (
-              <button
-                key={link.id}
-                onClick={() => onTabChange(link.id)}
-                className={`transition-all whitespace-nowrap relative py-2 ${
-                  isActive
-                    ? 'text-white font-bold'
-                    : 'text-emerald-100/70 hover:text-white'
-                }`}
-              >
-                {link.label}
-                {isActive && (
-                  <span className="absolute bottom-0 left-0 right-0 h-0.5 bg-[#00A651] rounded-full shadow-[0_0_8px_#00A651]" />
-                )}
-              </button>
-            );
-          })}
-        </nav>
-
-        {/* Zone 3: 1–2 primary actions */}
-        <div className="flex items-center gap-2 sm:gap-3">
+        {/* Quick Action Buttons & User Menu */}
+        <div className="flex items-center gap-1.5 sm:gap-2.5">
           {/* Scanner shortcut button for staff/admins */}
           {userRole !== 'MEMBER' && (
             <div className="flex items-center gap-1.5">
               <button
                 onClick={onOpenScanner}
-                className="px-3 py-1.5 bg-[#00A651] hover:bg-[#008f45] text-white rounded-xl transition-all flex items-center gap-1.5 text-xs font-bold shadow-xs cursor-pointer"
+                className="px-2.5 sm:px-3 py-1.5 bg-[#00A651] hover:bg-[#008f45] text-white rounded-xl transition-all flex items-center gap-1.5 text-xs font-bold shadow-xs cursor-pointer"
                 title="Pindai Kartu Member / Barcode Tamu"
               >
                 <QrCode className="w-3.5 h-3.5" />
@@ -143,7 +144,7 @@ export const Navbar: React.FC<NavbarProps> = ({
               {onOpenVoucherScanner && (
                 <button
                   onClick={onOpenVoucherScanner}
-                  className="px-3 py-1.5 bg-amber-600 hover:bg-amber-700 text-white rounded-xl transition-all flex items-center gap-1.5 text-xs font-bold shadow-xs cursor-pointer"
+                  className="px-2.5 sm:px-3 py-1.5 bg-amber-600 hover:bg-amber-700 text-white rounded-xl transition-all flex items-center gap-1.5 text-xs font-bold shadow-xs cursor-pointer"
                   title="Pindai Barcode / QR Voucher Tamu"
                 >
                   <Ticket className="w-3.5 h-3.5" />
@@ -364,35 +365,44 @@ export const Navbar: React.FC<NavbarProps> = ({
               )}
             </div>
           ) : (
-            <button
-              onClick={onOpenLogin}
-              className="px-3.5 py-2 rounded-xl bg-[#00A651] hover:bg-[#008f45] text-white text-xs font-bold flex items-center gap-1.5 transition-colors shadow-xs cursor-pointer"
-            >
-              <LogIn className="w-3.5 h-3.5" />
-              <span>Masuk</span>
-            </button>
+            onOpenLogin && (
+              <button
+                onClick={onOpenLogin}
+                className="px-3.5 py-1.5 bg-[#00A651] hover:bg-[#008f45] text-white rounded-xl text-xs font-semibold flex items-center gap-1.5 transition-colors cursor-pointer shadow-xs"
+              >
+                <LogIn className="w-3.5 h-3.5" />
+                <span>Masuk / Daftar</span>
+              </button>
+            )
           )}
         </div>
       </div>
 
-      {/* Mobile Nav Scroller */}
-      <div className="lg:hidden px-4 py-2 border-t border-stone-800/80 flex items-center gap-3 overflow-x-auto no-scrollbar text-xs">
-        {navLinks.map((link) => {
-          const isActive = currentTab === link.id;
-          return (
-            <button
-              key={link.id}
-              onClick={() => onTabChange(link.id)}
-              className={`px-3 py-1.5 rounded-lg whitespace-nowrap font-medium transition-colors ${
-                isActive
-                  ? 'bg-amber-400/20 text-amber-300 font-semibold'
-                  : 'text-stone-400 hover:text-stone-200'
-              }`}
-            >
-              {link.label}
-            </button>
-          );
-        })}
+      {/* ROW 2: Dedicated Navigation Menu Strip (Horizontal Row) */}
+      <div className="bg-[#04170d] border-t border-[#0b2f1c] shadow-inner">
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+          <nav className="flex items-center gap-1 sm:gap-2 overflow-x-auto no-scrollbar py-1.5 scroll-smooth">
+            {navLinks.map((link) => {
+              const isActive = currentTab === link.id;
+              return (
+                <button
+                  key={link.id}
+                  onClick={() => onTabChange(link.id)}
+                  className={`px-3 sm:px-3.5 py-1.5 rounded-xl text-xs sm:text-[13px] whitespace-nowrap transition-all cursor-pointer font-medium flex items-center gap-1.5 ${
+                    isActive
+                      ? 'bg-[#00A651] text-white font-bold shadow-[0_2px_8px_rgba(0,166,81,0.3)] ring-1 ring-emerald-400/40'
+                      : 'text-emerald-100/75 hover:text-white hover:bg-emerald-900/40'
+                  }`}
+                >
+                  <span>{link.label}</span>
+                  {isActive && (
+                    <span className="w-1.5 h-1.5 rounded-full bg-white shadow-xs" />
+                  )}
+                </button>
+              );
+            })}
+          </nav>
+        </div>
       </div>
 
       {/* Universal User Profile Edit Modal */}

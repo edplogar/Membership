@@ -312,8 +312,13 @@ export const LoginPage: React.FC<LoginPageProps> = ({ onSuccess }) => {
 
             {/* Top Logo & Title */}
             <div className="relative z-10 space-y-6">
-              <div className="p-3.5 bg-white rounded-2xl shadow-md border border-[#00A651]/30 inline-block">
-                <LombokGardenLogo variant="vertical" size="lg" />
+              {/* Logo Component with Transparent Container as requested */}
+              <div className="bg-transparent p-0 border-none shadow-none inline-block">
+                <img
+                  src="/lombok-garden-logo.svg"
+                  alt="Lombok Garden Hotel Logo"
+                  className="w-28 sm:w-36 h-auto object-contain drop-shadow-lg"
+                />
               </div>
 
               <div className="space-y-3">
@@ -487,19 +492,9 @@ export const LoginPage: React.FC<LoginPageProps> = ({ onSuccess }) => {
                   </button>
                 </form>
 
-                {/* Registration Switch */}
-                <div className="pt-4 border-t border-stone-100 text-center text-xs text-stone-600">
-                  Belum memiliki akun member?{' '}
-                  <button
-                    type="button"
-                    onClick={() => {
-                      setAuthMode('register');
-                      setErrorMessage(null);
-                    }}
-                    className="font-bold text-[#00A651] hover:underline cursor-pointer"
-                  >
-                    Daftar Keanggotaan Baru
-                  </button>
+                {/* Footer Login Assistance note */}
+                <div className="pt-4 border-t border-stone-100 text-center text-xs text-stone-500">
+                  <span>Portal Keanggotaan & Layanan Tamu Resmi Lombok Garden Hotel</span>
                 </div>
               </div>
             )}

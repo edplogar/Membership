@@ -26,6 +26,18 @@ export const Modal: React.FC<ModalProps> = ({
     return () => window.removeEventListener('keydown', handleKeyDown);
   }, [isOpen, onClose]);
 
+  // Lock body scroll when modal is open
+  useEffect(() => {
+    if (isOpen) {
+      document.body.style.overflow = 'hidden';
+    } else {
+      document.body.style.overflow = 'unset';
+    }
+    return () => {
+      document.body.style.overflow = 'unset';
+    };
+  }, [isOpen]);
+
   if (!isOpen) return null;
 
   const maxWidthClasses = {
@@ -38,32 +50,40 @@ export const Modal: React.FC<ModalProps> = ({
   };
 
   return (
-    <div className="fixed inset-0 z-50 overflow-y-auto bg-stone-900/60 backdrop-blur-xs flex items-center justify-center p-4">
+    <div
+      className="fixed inset-0 z-[9999] overflow-y-auto bg-stone-950/75 backdrop-blur-xs flex items-center justify-center p-3 sm:p-5 text-stone-900 antialiased font-sans"
+      onClick={onClose}
+    >
       <div
-        className={`relative w-full ${maxWidthClasses[maxWidth]} bg-white rounded-2xl shadow-2xl border border-stone-200 overflow-hidden transform transition-all animate-in fade-in zoom-in-95 duration-150`}
+        className={`relative w-full ${maxWidthClasses[maxWidth]} bg-white rounded-2xl shadow-2xl border border-stone-200 overflow-hidden transform transition-all my-auto max-h-[90vh] flex flex-col animate-in fade-in zoom-in-95 duration-150`}
         onClick={(e) => e.stopPropagation()}
       >
         {/* Header */}
-        <div className="flex items-start justify-between px-6 py-4.5 border-b border-stone-100 bg-stone-50/70">
-          <div>
-            <h3 className="text-base font-semibold text-stone-900 tracking-tight">
+        <div className="flex items-start justify-between px-5 sm:px-6 py-4 border-b border-stone-100 bg-stone-50/80 shrink-0">
+          <div className="pr-4">
+            <h3 className="text-base sm:text-lg font-bold text-stone-900 tracking-tight">
               {title}
             </h3>
             {subtitle && (
-              <p className="text-xs text-stone-500 mt-0.5">{subtitle}</p>
+              <p className="text-xs text-stone-500 mt-0.5 leading-relaxed">{subtitle}</p>
             )}
           </div>
           <button
+            type="button"
             onClick={onClose}
-            className="p-1.5 text-stone-400 hover:text-stone-700 hover:bg-stone-200/50 rounded-lg transition-colors"
+            className="p-1.5 text-stone-400 hover:text-stone-700 hover:bg-stone-200/60 rounded-xl transition-colors shrink-0 cursor-pointer"
+            title="Tutup (Esc)"
           >
             <X className="w-4 h-4" />
           </button>
         </div>
 
-        {/* Content */}
-        <div className="px-6 py-5 max-h-[82vh] overflow-y-auto">{children}</div>
+        {/* Scrollable Content */}
+        <div className="px-5 sm:px-6 py-5 overflow-y-auto flex-1">
+          {children}
+        </div>
       </div>
     </div>
   );
 };
+

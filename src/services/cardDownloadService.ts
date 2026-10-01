@@ -103,31 +103,52 @@ export async function downloadMemberCardImage(
     ctx.stroke();
 
     // 4. Header: Hotel Brand
-    // Logo Icon Box
+    // Official Logo Container
     ctx.fillStyle = '#ffffff';
     ctx.beginPath();
-    ctx.roundRect(45, 42, 52, 52, 14);
+    ctx.roundRect(45, 38, 58, 58, 16);
     ctx.fill();
 
-    // Green Leaf symbol in logo
-    ctx.fillStyle = '#00A651';
-    ctx.beginPath();
-    ctx.ellipse(71, 68, 16, 10, Math.PI / 4, 0, Math.PI * 2);
-    ctx.fill();
-    ctx.fillStyle = '#C5A869';
-    ctx.beginPath();
-    ctx.arc(71, 64, 4, 0, Math.PI * 2);
-    ctx.fill();
+    // Try loading and drawing official vector logo from /lombok-garden-logo.svg
+    try {
+      const logoImg = new Image();
+      logoImg.crossOrigin = 'anonymous';
+      logoImg.src = '/lombok-garden-logo.svg';
+      await new Promise<void>((resolve) => {
+        logoImg.onload = () => resolve();
+        logoImg.onerror = () => resolve();
+      });
+      if (logoImg.complete && logoImg.naturalWidth > 0) {
+        ctx.drawImage(logoImg, 49, 42, 50, 50);
+      } else {
+        // Fallback: Exact Brand Flower Blossom Drawing
+        ctx.fillStyle = '#00A651';
+        ctx.beginPath();
+        ctx.arc(74, 67, 18, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.fillStyle = '#FFFFFF';
+        ctx.beginPath();
+        ctx.arc(74, 67, 6, 0, Math.PI * 2);
+        ctx.fill();
+      }
+    } catch {
+      // Graceful fallback
+      ctx.fillStyle = '#00A651';
+      ctx.beginPath();
+      ctx.arc(74, 67, 18, 0, Math.PI * 2);
+      ctx.fill();
+    }
 
     // Hotel Name Typography
-    ctx.font = 'bold 26px Georgia, serif';
+    ctx.font = '900 24px system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif';
     ctx.fillStyle = '#ffffff';
-    ctx.fillText('LOMBOK GARDEN HOTEL', 115, 68);
+    ctx.letterSpacing = '1px';
+    ctx.fillText('LOMBOK GARDEN HOTEL', 120, 66);
 
-    ctx.font = 'bold 11px -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif';
-    ctx.fillStyle = '#C5A869';
+    ctx.font = 'bold 11px system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif';
+    ctx.fillStyle = '#34D399';
     ctx.letterSpacing = '3px';
-    ctx.fillText('HOSPITALITY & LOYALTY CLUB', 116, 88);
+    ctx.fillText('HOSPITALITY & LOYALTY CLUB', 121, 86);
 
     // 5. Tier Badge on Top Right
     const tierNameUpper = `${tier.name.toUpperCase()} TIER`;

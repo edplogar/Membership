@@ -161,7 +161,12 @@ interface AppContextValue {
   forceSyncToCloud: () => Promise<boolean>;
 
   // Actions
-  addMember: (data: Omit<Member, 'id' | 'membershipNumber' | 'totalVisits' | 'totalTransactions' | 'totalSpending' | 'totalPointsEarned' | 'availablePoints' | 'redeemedPoints'>) => Member;
+  addMember: (
+    data: Omit<Member, 'id' | 'membershipNumber' | 'totalVisits' | 'totalTransactions' | 'totalSpending' | 'redeemedPoints' | 'totalPointsEarned' | 'availablePoints'> & {
+      availablePoints?: number;
+      totalPointsEarned?: number;
+    }
+  ) => Member;
   updateMember: (id: string, updates: Partial<Member>) => void;
   deleteMember: (id: string) => boolean;
   changeMemberTier: (memberId: string, newTierId: string, reason: string) => void;
@@ -237,6 +242,9 @@ interface AppContextValue {
 
   markNotificationRead: (id: string) => void;
   markAllNotificationsRead: () => void;
+  resetMembersData: () => void;
+  resetTransactionsData: () => void;
+  resetUserAccounts: () => void;
   resetAllData: () => void;
 }
 
@@ -536,20 +544,26 @@ export function AppProvider({ children }: { children: ReactNode }) {
   };
 
   // Add Member
-  const addMember = (data: Omit<Member, 'id' | 'membershipNumber' | 'totalVisits' | 'totalTransactions' | 'totalSpending' | 'totalPointsEarned' | 'availablePoints' | 'redeemedPoints'>): Member => {
+  const addMember = (
+    data: Omit<Member, 'id' | 'membershipNumber' | 'totalVisits' | 'totalTransactions' | 'totalSpending' | 'redeemedPoints' | 'totalPointsEarned' | 'availablePoints'> & {
+      availablePoints?: number;
+      totalPointsEarned?: number;
+    }
+  ): Member => {
     const newId = `mem_${Date.now()}`;
     const membershipNumber = generateMembershipNumber(members.length);
+    const initialPts = data.availablePoints || 0;
     const newMember: Member = {
-      ...data,
-      id: newId,
-      membershipNumber,
       totalVisits: 0,
       totalTransactions: 0,
       totalSpending: 0,
-      totalPointsEarned: 0,
-      availablePoints: 0,
       redeemedPoints: 0,
-      status: 'ACTIVE',
+      ...data,
+      status: data.status || 'ACTIVE',
+      id: newId,
+      membershipNumber,
+      availablePoints: initialPts,
+      totalPointsEarned: data.totalPointsEarned || initialPts,
     };
 
     setMembers((prev) => [newMember, ...prev]);
@@ -1105,21 +1119,40 @@ export function AppProvider({ children }: { children: ReactNode }) {
     }
 
     let searchCode = raw;
+    let extractedMemberId: string | undefined = undefined;
+    let extractedVoucherId: string | undefined = undefined;
+
     try {
       if (raw.startsWith('{') && raw.endsWith('}')) {
         const parsed = JSON.parse(raw);
         searchCode = parsed.code || parsed.voucherCode || parsed.id || raw;
+        extractedMemberId = parsed.memberId || parsed.member_id;
+        extractedVoucherId = parsed.voucherId || parsed.voucher_id || parsed.id;
+      } else if (raw.includes(':')) {
+        const parts = raw.split(':');
+        if (parts.length >= 3 && (parts[0] === 'VCH' || parts[0] === 'VOUCHER')) {
+          searchCode = parts[1];
+          extractedMemberId = parts[2];
+        } else if (parts.length === 2) {
+          searchCode = parts[0];
+          extractedMemberId = parts[1];
+        }
       }
     } catch {}
 
     const codeUpper = searchCode.toUpperCase();
+    const explicitMember = extractedMemberId
+      ? members.find((m) => m.id === extractedMemberId || m.membershipNumber === extractedMemberId)
+      : undefined;
 
-    // 1. Check in voucherRedemptions
-    const existingClaim = voucherRedemptions.find(
-      (vr) =>
-        vr.id.toUpperCase() === codeUpper ||
-        vr.voucherCode.toUpperCase() === codeUpper
-    );
+    // 1. Check in voucherRedemptions (by claim ID or voucherCode)
+    const existingClaim = voucherRedemptions.find((vr) => {
+      if (extractedMemberId && vr.memberId === extractedMemberId) {
+        if (vr.id.toUpperCase() === codeUpper || vr.voucherCode.toUpperCase() === codeUpper) return true;
+        if (extractedVoucherId && vr.voucherId === extractedVoucherId) return true;
+      }
+      return vr.id.toUpperCase() === codeUpper || vr.voucherCode.toUpperCase() === codeUpper;
+    });
 
     if (existingClaim) {
       const voucher = vouchers.find((v) => v.id === existingClaim.voucherId) || {
@@ -1140,7 +1173,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
         status: 'active' as const,
       };
 
-      const member = members.find((m) => m.id === existingClaim.memberId);
+      const member = explicitMember || members.find((m) => m.id === existingClaim.memberId);
 
       if (existingClaim.status === 'used') {
         const usedDateStr = existingClaim.usedAt ? formatDateIndo(existingClaim.usedAt.slice(0, 10)) : 'sebelumnya';
@@ -1165,14 +1198,15 @@ export function AppProvider({ children }: { children: ReactNode }) {
     }
 
     // 2. Check in redemptions (Poin Reward)
-    const existingReward = redemptions.find(
-      (r) =>
-        r.id.toUpperCase() === codeUpper ||
-        r.redemptionCode.toUpperCase() === codeUpper
-    );
+    const existingReward = redemptions.find((r) => {
+      if (extractedMemberId && r.memberId === extractedMemberId) {
+        if (r.id.toUpperCase() === codeUpper || r.redemptionCode.toUpperCase() === codeUpper) return true;
+      }
+      return r.id.toUpperCase() === codeUpper || r.redemptionCode.toUpperCase() === codeUpper;
+    });
 
     if (existingReward) {
-      const member = members.find((m) => m.id === existingReward.memberId);
+      const member = explicitMember || members.find((m) => m.id === existingReward.memberId);
       const pseudoVoucher: Voucher = {
         id: existingReward.rewardId,
         code: existingReward.redemptionCode,
@@ -1213,14 +1247,42 @@ export function AppProvider({ children }: { children: ReactNode }) {
       };
     }
 
-    // 3. Check in master vouchers by promo code
-    const masterVoucher = vouchers.find((v) => v.code.toUpperCase() === codeUpper);
+    // 3. Check in master vouchers by promo code or ID
+    const masterVoucher = vouchers.find(
+      (v) => v.code.toUpperCase() === codeUpper || v.id.toUpperCase() === codeUpper || (extractedVoucherId && v.id === extractedVoucherId)
+    );
+
     if (masterVoucher) {
+      const member = explicitMember;
+
+      // Check if this member has already used this master voucher
+      if (member) {
+        const alreadyUsed = voucherRedemptions.find(
+          (vr) =>
+            vr.memberId === member.id &&
+            (vr.voucherId === masterVoucher.id || vr.voucherCode.toUpperCase() === masterVoucher.code.toUpperCase()) &&
+            vr.status === 'used'
+        );
+
+        if (alreadyUsed) {
+          const usedDateStr = alreadyUsed.usedAt ? formatDateIndo(alreadyUsed.usedAt.slice(0, 10)) : 'sebelumnya';
+          return {
+            isValid: false,
+            status: 'used' as const,
+            voucher: masterVoucher,
+            member,
+            redemption: alreadyUsed,
+            message: `Voucher "${masterVoucher.title}" SUDAH PERNAH DIGUNAKAN oleh ${member.fullName} pada ${usedDateStr}.`,
+          };
+        }
+      }
+
       if (masterVoucher.status !== 'active') {
         return {
           isValid: false,
           status: 'expired' as const,
           voucher: masterVoucher,
+          member,
           message: `Voucher "${masterVoucher.title}" saat ini berstatus ${masterVoucher.status}.`,
         };
       }
@@ -1229,7 +1291,8 @@ export function AppProvider({ children }: { children: ReactNode }) {
         isValid: true,
         status: 'available' as const,
         voucher: masterVoucher,
-        message: `Kupon Promosi "${masterVoucher.title}" (${masterVoucher.code}) siap diredeem.`,
+        member,
+        message: `Kupon Promosi "${masterVoucher.title}" (${masterVoucher.code}) siap diredeem${member ? ` untuk ${member.fullName}` : ''}.`,
       };
     }
 
@@ -1367,9 +1430,10 @@ export function AppProvider({ children }: { children: ReactNode }) {
     // C. Master Voucher direct claim & redeem
     if (verified.voucher) {
       const v = verified.voucher;
+      const targetMemberId = verified.member?.id || 'mem_john_doe';
       const newRedemption: VoucherRedemption = {
-        id: `vrdm_${Date.now()}`,
-        memberId: verified.member?.id || 'mem_walk_in',
+        id: `vrdm_${Date.now()}_${Math.random().toString(36).substring(2, 6)}`,
+        memberId: targetMemberId,
         voucherId: v.id,
         voucherCode: v.code,
         discountApplied: v.discountValue,
@@ -1383,7 +1447,21 @@ export function AppProvider({ children }: { children: ReactNode }) {
         notes: staffInfo.notes || `Redeem langsung via Barcode di ${outlet}`,
       };
 
-      setVoucherRedemptions((prev) => [newRedemption, ...prev]);
+      // Also update any existing available claim for this member & voucher
+      setVoucherRedemptions((prev) => {
+        const hasExisting = prev.some(
+          (r) => r.memberId === targetMemberId && (r.voucherId === v.id || r.voucherCode === v.code)
+        );
+        if (hasExisting) {
+          return prev.map((r) =>
+            r.memberId === targetMemberId && (r.voucherId === v.id || r.voucherCode === v.code)
+              ? { ...r, status: 'used', usedAt: now, redeemedByStaffName: staffName, outlet, notes: newRedemption.notes }
+              : r
+          );
+        }
+        return [newRedemption, ...prev];
+      });
+
       setVouchers((prev) =>
         prev.map((item) => (item.id === v.id ? { ...item, usedCount: (item.usedCount || 0) + 1 } : item))
       );
@@ -1398,15 +1476,26 @@ export function AppProvider({ children }: { children: ReactNode }) {
         'VOUCHER_ENGINE',
         newRedemption.id,
         `Staff: ${staffName} (${outlet})`,
-        `Voucher: ${v.code} - ${v.title}`
+        `Voucher: ${v.code} - ${v.title} untuk Member: ${targetMemberId}`
       );
+
+      const targetMemberObj = members.find((m) => m.id === targetMemberId) || verified.member;
+      if (targetMemberObj) {
+        const notif = createNotificationRecord(
+          targetMemberObj.id,
+          'Voucher Berhasil Digunakan',
+          `Voucher "${v.title}" (${v.code}) berhasil digunakan di ${outlet} pada ${formatDateIndo(now.slice(0, 10))}.`,
+          'voucher'
+        );
+        setNotifications((prev) => [notif, ...prev]);
+      }
 
       showToast(`Voucher "${v.title}" BERHASIL DIREDEEM di ${outlet}!`, 'success');
       return {
         success: true,
         message: `Voucher berhasil diredeem.`,
         voucher: v,
-        member: verified.member,
+        member: targetMemberObj,
         redemption: newRedemption,
       };
     }
@@ -1774,7 +1863,42 @@ export function AppProvider({ children }: { children: ReactNode }) {
     showToast('Semua notifikasi ditandai telah dibaca.', 'info');
   };
 
-  // Reset Data Demo
+  // Reset Data Granular & Total
+  const resetMembersData = () => {
+    setMembers(INITIAL_MEMBERS);
+    setPointTransactions(INITIAL_POINT_TXS);
+    setRedemptions(INITIAL_REDEMPTIONS);
+    setVoucherRedemptions([]);
+    showToast('Database data member berhasil direset ke data awal.', 'info');
+  };
+
+  const resetTransactionsData = () => {
+    setTransactions([]);
+    setStays([]);
+    setPointTransactions([]);
+    setRedemptions([]);
+    setVoucherRedemptions([]);
+    // Also reset spending/points counters on existing members
+    setMembers((prev) =>
+      prev.map((m) => ({
+        ...m,
+        totalSpending: 0,
+        totalVisits: 0,
+        totalTransactions: 0,
+        availablePoints: 100,
+        totalPointsEarned: 100,
+        redeemedPoints: 0,
+      }))
+    );
+    showToast('Seluruh riwayat transaksi, stay, dan poin belanja berhasil dibersihkan.', 'info');
+  };
+
+  const resetUserAccounts = () => {
+    setUsers(INITIAL_USERS);
+    setRoles(INITIAL_ROLES);
+    showToast('Akun staf & izin administrator berhasil direset ke pengaturan bawaan.', 'info');
+  };
+
   const resetAllData = () => {
     setMembers(INITIAL_MEMBERS);
     setTiers(INITIAL_TIERS);
@@ -1877,6 +2001,9 @@ export function AppProvider({ children }: { children: ReactNode }) {
         deleteUser,
         markNotificationRead,
         markAllNotificationsRead,
+        resetMembersData,
+        resetTransactionsData,
+        resetUserAccounts,
         resetAllData,
       }}
     >

@@ -26,6 +26,7 @@ export const MemberVouchers: React.FC = () => {
   const [activeTab, setActiveTab] = useState<'available' | 'history'>('available');
   const [selectedVoucherForQR, setSelectedVoucherForQR] = useState<{
     code: string;
+    displayCode?: string;
     title: string;
     description?: string;
     type?: string;
@@ -35,17 +36,28 @@ export const MemberVouchers: React.FC = () => {
   const memberId = currentMember?.id || 'mem_john_doe';
   const memberTierId = currentMember?.tierId || 'tier_gold';
 
-  // Available vouchers that can be claimed or used
-  const availableVouchers = vouchers.filter(
-    (v) => v.status === 'active' && v.applicableTierIds.includes(memberTierId)
+  // Set of voucher IDs or codes that have been used by this member
+  const usedVoucherIdentifiers = new Set(
+    voucherRedemptions
+      .filter((vr) => vr.memberId === memberId && vr.status === 'used')
+      .flatMap((vr) => [vr.voucherId, vr.voucherCode].filter(Boolean))
   );
+
+  // Available vouchers for this member (excludes already redeemed ones)
+  const availableVouchers = vouchers.filter((v) => {
+    if (v.status !== 'active') return false;
+    if (!v.applicableTierIds.includes(memberTierId)) return false;
+    if (usedVoucherIdentifiers.has(v.id) || usedVoucherIdentifiers.has(v.code)) return false;
+    if (v.usageLimit && (v.usedCount || 0) >= v.usageLimit) return false;
+    return true;
+  });
 
   // Vouchers claimed by member (active / unused)
   const memberClaims = voucherRedemptions.filter(
     (vr) => vr.memberId === memberId && vr.status !== 'used'
   );
 
-  // Reward vouchers from points
+  // Reward vouchers from points (active / unredeemed)
   const activeRewardRedemptions = redemptions.filter(
     (r) => r.memberId === memberId && r.status !== 'used'
   );
@@ -151,7 +163,14 @@ export const MemberVouchers: React.FC = () => {
                       <button
                         onClick={() =>
                           setSelectedVoucherForQR({
-                            code: r.redemptionCode,
+                            code: JSON.stringify({
+                              type: 'reward_redemption',
+                              code: r.redemptionCode,
+                              rewardId: r.rewardId,
+                              memberId: memberId,
+                              membershipNumber: currentMember?.membershipNumber,
+                            }),
+                            displayCode: r.redemptionCode,
                             title: r.rewardTitle,
                             description: 'Tunjukkan barcode atau QR ini kepada staf hotel saat pembayaran.',
                           })
@@ -220,7 +239,14 @@ export const MemberVouchers: React.FC = () => {
                         <button
                           onClick={() =>
                             setSelectedVoucherForQR({
-                              code: v.code,
+                              code: JSON.stringify({
+                                type: 'member_voucher',
+                                code: v.code,
+                                voucherId: v.id,
+                                memberId: memberId,
+                                membershipNumber: currentMember?.membershipNumber,
+                              }),
+                              displayCode: v.code,
                               title: v.title,
                               description: v.description,
                               type: v.type,
@@ -458,7 +484,7 @@ export const MemberVouchers: React.FC = () => {
                 )}
               </div>
               <div className="font-mono text-base font-bold text-stone-900 tracking-widest mt-1.5">
-                {selectedVoucherForQR.code}
+                {selectedVoucherForQR.displayCode || selectedVoucherForQR.code}
               </div>
             </div>
 

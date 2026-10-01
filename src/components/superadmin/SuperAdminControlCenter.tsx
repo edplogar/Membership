@@ -30,7 +30,20 @@ import {
   ChevronDown,
   ChevronUp,
   BellRing,
+  UserPlus,
+  Plus,
+  Download,
+  RotateCcw,
+  Trash2,
+  AlertTriangle,
+  Receipt,
+  BedDouble,
+  ShieldAlert,
 } from 'lucide-react';
+import { Member } from '../../types';
+import { Modal } from '../common/Modal';
+import { ConfirmDialog } from '../common/ConfirmDialog';
+import { MemberCardSuccessModal } from '../common/MemberCardSuccessModal';
 import {
   MEMBER_CUSTOM_DOMAIN,
   FIRESTORE_DATABASE_ID,
@@ -68,12 +81,101 @@ export const SuperAdminControlCenter: React.FC<SuperAdminControlCenterProps> = (
     whatsappLogs,
     emailLogs,
     users,
+    addMember,
     updateWhatsAppConfig,
     addWhatsAppLog,
     openSyncModal,
     forceSyncToCloud,
+    resetMembersData,
+    resetTransactionsData,
+    resetUserAccounts,
+    resetAllData,
   } = useApp();
   const { showToast } = useToast();
+
+  // Reset Data Modal confirmation state
+  const [resetActionTarget, setResetActionTarget] = useState<'members' | 'transactions' | 'users' | 'all' | null>(null);
+
+  // New Membership Registration state
+  const [isNewRegistrationOpen, setIsNewRegistrationOpen] = useState(false);
+  const [newlyRegisteredMember, setNewlyRegisteredMember] = useState<Member | null>(null);
+  const [regForm, setRegForm] = useState({
+    fullName: '',
+    nickname: '',
+    email: '',
+    phone: '',
+    gender: 'L' as 'L' | 'P',
+    birthDate: '1990-01-01',
+    address: 'Jl. Bung Karno No. 7',
+    city: 'Mataram',
+    province: 'Nusa Tenggara Barat',
+    country: 'Indonesia',
+    idCardNumber: '',
+    tierId: 'tier_member',
+    bonusPoints: 100,
+    internalNotes: '',
+  });
+
+  const handleRegisterNewMember = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!regForm.fullName.trim() || !regForm.email.trim() || !regForm.phone.trim()) {
+      showToast('Harap lengkapi nama lengkap, alamat email, dan nomor WhatsApp.', 'error');
+      return;
+    }
+
+    if (members.some((m) => m.email.toLowerCase() === regForm.email.trim().toLowerCase())) {
+      showToast('Alamat email tersebut sudah terdaftar pada member lain.', 'error');
+      return;
+    }
+
+    const now = new Date().toISOString().slice(0, 10);
+    const end = new Date(Date.now() + 24 * 30 * 86400000).toISOString().slice(0, 10);
+
+    const created = addMember({
+      fullName: regForm.fullName.trim(),
+      nickname: regForm.nickname.trim() || regForm.fullName.trim().split(' ')[0],
+      email: regForm.email.trim().toLowerCase(),
+      phone: regForm.phone.trim(),
+      gender: regForm.gender,
+      birthDate: regForm.birthDate,
+      address: regForm.address,
+      city: regForm.city,
+      province: regForm.province,
+      country: regForm.country,
+      idCardNumber: regForm.idCardNumber || '5201000000000000',
+      tierId: regForm.tierId || 'tier_member',
+      registrationDate: now,
+      membershipStartDate: now,
+      membershipEndDate: end,
+      referralCode: `${regForm.fullName.slice(0, 4).toUpperCase()}-LGH`,
+      status: 'ACTIVE',
+      availablePoints: Number(regForm.bonusPoints) || 100,
+      totalPointsEarned: Number(regForm.bonusPoints) || 100,
+      internalNotes: regForm.internalNotes || 'Pendaftaran keanggotaan baru via Control Center Super Admin.',
+    });
+
+    setIsNewRegistrationOpen(false);
+    setNewlyRegisteredMember(created);
+    showToast(`Member baru "${created.fullName}" (${created.membershipNumber}) berhasil didaftarkan!`, 'success');
+
+    // Reset form
+    setRegForm({
+      fullName: '',
+      nickname: '',
+      email: '',
+      phone: '',
+      gender: 'L',
+      birthDate: '1990-01-01',
+      address: 'Jl. Bung Karno No. 7',
+      city: 'Mataram',
+      province: 'Nusa Tenggara Barat',
+      country: 'Indonesia',
+      idCardNumber: '',
+      tierId: 'tier_member',
+      bonusPoints: 100,
+      internalNotes: '',
+    });
+  };
 
   // Cloud Database Sync Notification state (exclusive to Control Center)
   const [isSyncingCloud, setIsSyncingCloud] = useState(false);
@@ -379,24 +481,33 @@ export const SuperAdminControlCenter: React.FC<SuperAdminControlCenterProps> = (
             </div>
 
             {/* Quick Actions inside Notification */}
-            <div className="flex flex-col gap-2.5 shrink-0 w-full md:w-56">
+            <div className="flex flex-col gap-2 shrink-0 w-full md:w-56">
+              <button
+                type="button"
+                onClick={() => setIsNewRegistrationOpen(true)}
+                className="w-full px-4 py-2.5 rounded-xl bg-amber-500 hover:bg-amber-400 text-stone-950 text-xs font-bold flex items-center justify-center gap-2 transition-all shadow-md cursor-pointer"
+              >
+                <UserPlus className="w-4 h-4 text-stone-950" />
+                <span>+ Pendaftaran Member Baru</span>
+              </button>
+
               <button
                 type="button"
                 onClick={handleQuickSyncCloud}
                 disabled={isSyncingCloud}
-                className="w-full px-4 py-2.5 rounded-xl bg-[#00A651] hover:bg-[#008f45] text-white text-xs font-bold flex items-center justify-center gap-2 transition-all shadow-md cursor-pointer disabled:opacity-50"
+                className="w-full px-4 py-2 rounded-xl bg-[#00A651] hover:bg-[#008f45] text-white text-xs font-bold flex items-center justify-center gap-2 transition-all shadow-md cursor-pointer disabled:opacity-50"
               >
-                <RefreshCw className={`w-4 h-4 ${isSyncingCloud ? 'animate-spin' : ''}`} />
-                <span>{isSyncingCloud ? 'Menyinkronkan...' : 'Sinkronkan Sekarang'}</span>
+                <RefreshCw className={`w-3.5 h-3.5 ${isSyncingCloud ? 'animate-spin' : ''}`} />
+                <span>{isSyncingCloud ? 'Menyinkronkan...' : 'Sinkronkan Cloud'}</span>
               </button>
 
               <button
                 type="button"
                 onClick={openSyncModal}
-                className="w-full px-4 py-2.5 rounded-xl bg-white/10 hover:bg-white/20 border border-emerald-400/40 text-emerald-100 hover:text-white text-xs font-semibold flex items-center justify-center gap-2 transition-all cursor-pointer"
+                className="w-full px-4 py-1.5 rounded-xl bg-white/10 hover:bg-white/20 border border-emerald-400/40 text-emerald-100 hover:text-white text-[11px] font-semibold flex items-center justify-center gap-1.5 transition-all cursor-pointer"
               >
-                <Sliders className="w-4 h-4 text-emerald-300" />
-                <span>Panel Detail DNS & Subdomain</span>
+                <Sliders className="w-3.5 h-3.5 text-emerald-300" />
+                <span>DNS & Subdomain</span>
               </button>
             </div>
           </div>
@@ -958,6 +1069,32 @@ export const SuperAdminControlCenter: React.FC<SuperAdminControlCenterProps> = (
         </h2>
 
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+          {/* 0. Pendaftaran & Registrasi Member Baru (VIP Registration Hub) */}
+          <div
+            onClick={() => setIsNewRegistrationOpen(true)}
+            className="p-5 bg-gradient-to-br from-emerald-900 to-emerald-950 text-white rounded-2xl border-2 border-emerald-500 shadow-md hover:shadow-lg hover:border-emerald-400 transition-all cursor-pointer group flex flex-col justify-between relative overflow-hidden"
+          >
+            <div className="absolute top-0 right-0 bg-amber-500 text-stone-950 text-[10px] font-bold px-3 py-0.5 rounded-bl-xl uppercase tracking-wider font-mono">
+              VIP Registration Hub
+            </div>
+            <div>
+              <div className="w-10 h-10 rounded-xl bg-white/10 text-amber-300 flex items-center justify-center mb-3 group-hover:scale-105 transition-transform border border-emerald-500/30">
+                <UserPlus className="w-5 h-5 text-amber-300" />
+              </div>
+              <h3 className="font-bold text-sm text-white group-hover:text-emerald-200 transition-colors flex items-center justify-between">
+                <span>Pendaftaran Member Baru</span>
+                <ArrowRight className="w-4 h-4 text-emerald-300 group-hover:translate-x-1 transition-transform" />
+              </h3>
+              <p className="text-xs text-stone-300 mt-1 leading-relaxed">
+                Daftarkan member baru secara instan, terbitkan kartu digital VIP (PNG), dan kirim otomatis via WhatsApp & Email.
+              </p>
+            </div>
+            <div className="mt-4 pt-3 border-t border-emerald-800 flex items-center justify-between text-[11px] text-amber-300 font-bold">
+              <span>+ Input Member Baru</span>
+              <span>Buka Formulir Pendaftaran →</span>
+            </div>
+          </div>
+
           {/* 1. WhatsApp CRM ping.co.id Tab Direct Link */}
           <div
             onClick={() => onNavigate('super_whatsapp')}
@@ -1143,6 +1280,383 @@ export const SuperAdminControlCenter: React.FC<SuperAdminControlCenterProps> = (
           </div>
         </div>
       </div>
+
+      {/* ================= PUSAT RESET & PEMELIHARAAN DATA SISTEM (SUPER ADMIN) ================= */}
+      <div className="space-y-4 pt-4 border-t border-stone-200">
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
+          <div>
+            <div className="flex items-center gap-2">
+              <ShieldAlert className="w-5 h-5 text-rose-600" />
+              <h2 className="font-serif font-bold text-base text-stone-900">
+                Pusat Reset & Pemeliharaan Database (Super Admin)
+              </h2>
+            </div>
+            <p className="text-xs text-stone-500 mt-0.5">
+              Fitur wewenang khusus Super Administrator untuk membersihkan atau mereset data member, transaksi, stay, dan akun pengguna.
+            </p>
+          </div>
+
+          <div className="text-[11px] font-mono font-bold text-rose-700 bg-rose-50 px-3 py-1 rounded-lg border border-rose-200">
+            Wewenang Super Admin Tertinggi
+          </div>
+        </div>
+
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-3.5">
+          {/* Action 1: Reset Member Data */}
+          <div className="p-4.5 bg-white rounded-2xl border-2 border-stone-200 hover:border-amber-500 transition-all flex flex-col justify-between shadow-xs">
+            <div>
+              <div className="w-9 h-9 rounded-xl bg-amber-50 text-amber-700 flex items-center justify-center mb-3">
+                <Users className="w-4.5 h-4.5" />
+              </div>
+              <h3 className="font-bold text-xs text-stone-900">
+                Reset Data Member
+              </h3>
+              <p className="text-[11px] text-stone-500 mt-1 leading-relaxed">
+                Mereset direktori member, profil pendaftaran baru, dan saldo poin kembali ke data awal.
+              </p>
+            </div>
+            <button
+              type="button"
+              onClick={() => setResetActionTarget('members')}
+              className="mt-4 w-full py-2 bg-amber-50 hover:bg-amber-100 text-amber-800 border border-amber-300 rounded-xl text-xs font-bold transition-colors cursor-pointer flex items-center justify-center gap-1.5"
+            >
+              <RotateCcw className="w-3.5 h-3.5" />
+              <span>Reset Data Member</span>
+            </button>
+          </div>
+
+          {/* Action 2: Reset Transaksi & Stays */}
+          <div className="p-4.5 bg-white rounded-2xl border-2 border-stone-200 hover:border-rose-500 transition-all flex flex-col justify-between shadow-xs">
+            <div>
+              <div className="w-9 h-9 rounded-xl bg-rose-50 text-rose-700 flex items-center justify-center mb-3">
+                <Receipt className="w-4.5 h-4.5" />
+              </div>
+              <h3 className="font-bold text-xs text-stone-900">
+                Reset Transaksi & Stay
+              </h3>
+              <p className="text-[11px] text-stone-500 mt-1 leading-relaxed">
+                Menghapus seluruh riwayat transaksi F&B/Spa, check-in reservasi stay, dan klaim voucher belanja.
+              </p>
+            </div>
+            <button
+              type="button"
+              onClick={() => setResetActionTarget('transactions')}
+              className="mt-4 w-full py-2 bg-rose-50 hover:bg-rose-100 text-rose-800 border border-rose-300 rounded-xl text-xs font-bold transition-colors cursor-pointer flex items-center justify-center gap-1.5"
+            >
+              <Trash2 className="w-3.5 h-3.5" />
+              <span>Bersihkan Transaksi</span>
+            </button>
+          </div>
+
+          {/* Action 3: Reset User Accounts */}
+          <div className="p-4.5 bg-white rounded-2xl border-2 border-stone-200 hover:border-blue-500 transition-all flex flex-col justify-between shadow-xs">
+            <div>
+              <div className="w-9 h-9 rounded-xl bg-blue-50 text-blue-700 flex items-center justify-center mb-3">
+                <Lock className="w-4.5 h-4.5" />
+              </div>
+              <h3 className="font-bold text-xs text-stone-900">
+                Reset Akun User & Staf
+              </h3>
+              <p className="text-[11px] text-stone-500 mt-1 leading-relaxed">
+                Mereset akun staf hotel, kredensial password, dan matriks hak akses ke bawaan standar.
+              </p>
+            </div>
+            <button
+              type="button"
+              onClick={() => setResetActionTarget('users')}
+              className="mt-4 w-full py-2 bg-blue-50 hover:bg-blue-100 text-blue-800 border border-blue-300 rounded-xl text-xs font-bold transition-colors cursor-pointer flex items-center justify-center gap-1.5"
+            >
+              <RotateCcw className="w-3.5 h-3.5" />
+              <span>Reset Akun User</span>
+            </button>
+          </div>
+
+          {/* Action 4: Reset Total (Factory Reset) */}
+          <div className="p-4.5 bg-gradient-to-br from-rose-950 to-stone-950 text-white rounded-2xl border-2 border-rose-800 transition-all flex flex-col justify-between shadow-md">
+            <div>
+              <div className="w-9 h-9 rounded-xl bg-rose-900/60 text-rose-300 flex items-center justify-center mb-3 border border-rose-700">
+                <AlertTriangle className="w-4.5 h-4.5" />
+              </div>
+              <h3 className="font-bold text-xs text-rose-200">
+                Reset Total (Factory Reset)
+              </h3>
+              <p className="text-[11px] text-stone-300 mt-1 leading-relaxed">
+                Mereset seluruh database, konfigurasi sistem, audit log, dan cache kembali ke awal.
+              </p>
+            </div>
+            <button
+              type="button"
+              onClick={() => setResetActionTarget('all')}
+              className="mt-4 w-full py-2 bg-rose-700 hover:bg-rose-600 text-white rounded-xl text-xs font-bold transition-colors cursor-pointer flex items-center justify-center gap-1.5 shadow-sm"
+            >
+              <AlertTriangle className="w-3.5 h-3.5" />
+              <span>Factory Reset Total</span>
+            </button>
+          </div>
+        </div>
+      </div>
+
+      {/* Confirmation Modal for Reset Actions */}
+      <ConfirmDialog
+        isOpen={Boolean(resetActionTarget)}
+        onClose={() => setResetActionTarget(null)}
+        title={
+          resetActionTarget === 'members'
+            ? 'Konfirmasi Reset Data Member'
+            : resetActionTarget === 'transactions'
+            ? 'Konfirmasi Reset Riwayat Transaksi & Stay'
+            : resetActionTarget === 'users'
+            ? 'Konfirmasi Reset Akun Pengguna & Staf'
+            : 'Konfirmasi Reset Total (Factory Reset Sistem)'
+        }
+        message={
+          resetActionTarget === 'members'
+            ? 'Apakah Anda yakin ingin mereset data direktori member tamu? Seluruh data pendaftaran baru akan dikembalikan ke data awal.'
+            : resetActionTarget === 'transactions'
+            ? 'Apakah Anda yakin ingin menghapus seluruh riwayat transaksi belanja, check-in menginap, dan pemakaian voucher? Saldo akumulasi spending member akan dikembalikan ke 0.'
+            : resetActionTarget === 'users'
+            ? 'Apakah Anda yakin ingin mereset seluruh akun login staf, admin, dan hak akses kembali ke setelan default?'
+            : 'PERINGATAN: Tindakan ini akan mengembalikan seluruh database (member, transaksi, stay, akun, audit log) ke kondisi awal pabrik. Lanjutkan?'
+        }
+        confirmText={
+          resetActionTarget === 'all'
+            ? 'Ya, Jalankan Factory Reset'
+            : 'Ya, Lakukan Reset'
+        }
+        isDestructive={true}
+        onConfirm={() => {
+          if (resetActionTarget === 'members') {
+            resetMembersData();
+          } else if (resetActionTarget === 'transactions') {
+            resetTransactionsData();
+          } else if (resetActionTarget === 'users') {
+            resetUserAccounts();
+          } else if (resetActionTarget === 'all') {
+            resetAllData();
+          }
+          setResetActionTarget(null);
+        }}
+      />
+
+      {/* ================= MODAL PENDAFTARAN MEMBER BARU (CONTROL CENTER) ================= */}
+      {isNewRegistrationOpen && (
+        <Modal
+          isOpen={isNewRegistrationOpen}
+          onClose={() => setIsNewRegistrationOpen(false)}
+          title="Pendaftaran & Registrasi Member Baru (Control Center)"
+          subtitle="Formulir resmi pembuatan kartu keanggotaan VIP Lombok Garden Hotel"
+          maxWidth="2xl"
+        >
+          <form onSubmit={handleRegisterNewMember} className="space-y-4 py-1">
+            <div className="p-3 bg-emerald-50 rounded-xl border border-emerald-200 text-xs text-emerald-950 flex items-center gap-2">
+              <Sparkles className="w-4 h-4 text-emerald-700 shrink-0" />
+              <span>
+                Member yang didaftarkan akan otomatis diterbitkan <strong>Kartu Digital VIP</strong> resmi, nomor membership berurutan, serta dikirimi notifikasi aktivasi via <strong>WhatsApp CRM</strong> dan <strong>Email</strong>.
+              </span>
+            </div>
+
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3.5">
+              <div>
+                <label className="block text-xs font-semibold text-stone-700 mb-1">
+                  Nama Lengkap (Sesuai KTP/Paspor) *
+                </label>
+                <input
+                  type="text"
+                  value={regForm.fullName}
+                  onChange={(e) => setRegForm({ ...regForm, fullName: e.target.value })}
+                  placeholder="Contoh: Budi Santoso"
+                  className="w-full px-3.5 py-2 bg-stone-50 border border-stone-300 rounded-xl text-xs focus:ring-2 focus:ring-[#00A651]/20 focus:border-[#00A651]"
+                  required
+                />
+              </div>
+
+              <div>
+                <label className="block text-xs font-semibold text-stone-700 mb-1">
+                  Nama Panggilan / Alias (Opsional)
+                </label>
+                <input
+                  type="text"
+                  value={regForm.nickname}
+                  onChange={(e) => setRegForm({ ...regForm, nickname: e.target.value })}
+                  placeholder="Contoh: Budi"
+                  className="w-full px-3.5 py-2 bg-stone-50 border border-stone-300 rounded-xl text-xs focus:ring-2 focus:ring-[#00A651]/20 focus:border-[#00A651]"
+                />
+              </div>
+
+              <div>
+                <label className="block text-xs font-semibold text-stone-700 mb-1">
+                  Alamat Email (Akun Login & Reset) *
+                </label>
+                <input
+                  type="email"
+                  value={regForm.email}
+                  onChange={(e) => setRegForm({ ...regForm, email: e.target.value })}
+                  placeholder="nama@email.com"
+                  className="w-full px-3.5 py-2 bg-stone-50 border border-stone-300 rounded-xl text-xs focus:ring-2 focus:ring-[#00A651]/20 focus:border-[#00A651]"
+                  required
+                />
+              </div>
+
+              <div>
+                <label className="block text-xs font-semibold text-stone-700 mb-1">
+                  Nomor WhatsApp Aktif *
+                </label>
+                <input
+                  type="text"
+                  value={regForm.phone}
+                  onChange={(e) => setRegForm({ ...regForm, phone: e.target.value })}
+                  placeholder="081234567890 atau +62812..."
+                  className="w-full px-3.5 py-2 bg-stone-50 border border-stone-300 rounded-xl text-xs focus:ring-2 focus:ring-[#00A651]/20 focus:border-[#00A651]"
+                  required
+                />
+              </div>
+
+              <div>
+                <label className="block text-xs font-semibold text-stone-700 mb-1">
+                  Tingkat Tier Awal
+                </label>
+                <select
+                  value={regForm.tierId}
+                  onChange={(e) => setRegForm({ ...regForm, tierId: e.target.value })}
+                  className="w-full px-3.5 py-2 bg-stone-50 border border-stone-300 rounded-xl text-xs focus:ring-2 focus:ring-[#00A651]/20 focus:border-[#00A651] cursor-pointer"
+                >
+                  {tiers.map((t) => (
+                    <option key={t.id} value={t.id}>
+                      {t.name} (Level {t.level}) - Diskon Kamar {t.roomDiscountPercent}%
+                    </option>
+                  ))}
+                </select>
+              </div>
+
+              <div>
+                <label className="block text-xs font-semibold text-stone-700 mb-1">
+                  Bonus Poin Selamat Datang (Poin)
+                </label>
+                <input
+                  type="number"
+                  value={regForm.bonusPoints}
+                  onChange={(e) => setRegForm({ ...regForm, bonusPoints: Number(e.target.value) })}
+                  min={0}
+                  step={50}
+                  className="w-full px-3.5 py-2 bg-stone-50 border border-stone-300 rounded-xl text-xs font-mono focus:ring-2 focus:ring-[#00A651]/20 focus:border-[#00A651]"
+                />
+              </div>
+
+              <div>
+                <label className="block text-xs font-semibold text-stone-700 mb-1">
+                  Jenis Kelamin
+                </label>
+                <div className="flex items-center gap-4 pt-1 text-xs">
+                  <label className="flex items-center gap-1.5 cursor-pointer">
+                    <input
+                      type="radio"
+                      name="ctrl_gender"
+                      checked={regForm.gender === 'L'}
+                      onChange={() => setRegForm({ ...regForm, gender: 'L' })}
+                      className="accent-[#00A651]"
+                    />
+                    <span>Laki-Laki (Mr)</span>
+                  </label>
+                  <label className="flex items-center gap-1.5 cursor-pointer">
+                    <input
+                      type="radio"
+                      name="ctrl_gender"
+                      checked={regForm.gender === 'P'}
+                      onChange={() => setRegForm({ ...regForm, gender: 'P' })}
+                      className="accent-[#00A651]"
+                    />
+                    <span>Perempuan (Mrs/Ms)</span>
+                  </label>
+                </div>
+              </div>
+
+              <div>
+                <label className="block text-xs font-semibold text-stone-700 mb-1">
+                  Tanggal Lahir
+                </label>
+                <input
+                  type="date"
+                  value={regForm.birthDate}
+                  onChange={(e) => setRegForm({ ...regForm, birthDate: e.target.value })}
+                  className="w-full px-3.5 py-2 bg-stone-50 border border-stone-300 rounded-xl text-xs focus:ring-2 focus:ring-[#00A651]/20 focus:border-[#00A651]"
+                />
+              </div>
+
+              <div>
+                <label className="block text-xs font-semibold text-stone-700 mb-1">
+                  Kota / Daerah Asal
+                </label>
+                <input
+                  type="text"
+                  value={regForm.city}
+                  onChange={(e) => setRegForm({ ...regForm, city: e.target.value })}
+                  placeholder="Mataram, Denpasar, Jakarta..."
+                  className="w-full px-3.5 py-2 bg-stone-50 border border-stone-300 rounded-xl text-xs focus:ring-2 focus:ring-[#00A651]/20 focus:border-[#00A651]"
+                />
+              </div>
+
+              <div>
+                <label className="block text-xs font-semibold text-stone-700 mb-1">
+                  No. KTP / Paspor (Opsional)
+                </label>
+                <input
+                  type="text"
+                  value={regForm.idCardNumber}
+                  onChange={(e) => setRegForm({ ...regForm, idCardNumber: e.target.value })}
+                  placeholder="520100..."
+                  className="w-full px-3.5 py-2 bg-stone-50 border border-stone-300 rounded-xl text-xs font-mono focus:ring-2 focus:ring-[#00A651]/20 focus:border-[#00A651]"
+                />
+              </div>
+            </div>
+
+            <div>
+              <label className="block text-xs font-semibold text-stone-700 mb-1">
+                Catatan Profil Khusus Tamu (Preferensi/Alergi)
+              </label>
+              <textarea
+                value={regForm.internalNotes}
+                onChange={(e) => setRegForm({ ...regForm, internalNotes: e.target.value })}
+                placeholder="Preferensi kamar lantai atas, bebas rokok, vegetarian, dsb..."
+                rows={2}
+                className="w-full px-3.5 py-2 bg-stone-50 border border-stone-300 rounded-xl text-xs focus:ring-2 focus:ring-[#00A651]/20 focus:border-[#00A651]"
+              />
+            </div>
+
+            <div className="pt-2 flex items-center justify-end gap-3 border-t border-stone-100">
+              <button
+                type="button"
+                onClick={() => setIsNewRegistrationOpen(false)}
+                className="px-4 py-2.5 rounded-xl border border-stone-300 text-stone-700 text-xs font-semibold hover:bg-stone-50 cursor-pointer"
+              >
+                Batal
+              </button>
+              <button
+                type="submit"
+                className="px-6 py-2.5 rounded-xl bg-[#00A651] hover:bg-[#008F45] text-white text-xs font-bold shadow-md transition-all cursor-pointer flex items-center gap-1.5"
+              >
+                <UserPlus className="w-4 h-4" />
+                <span>Daftarkan & Terbitkan Kartu</span>
+              </button>
+            </div>
+          </form>
+        </Modal>
+      )}
+
+      {/* ================= MODAL VISUALISASI KARTU MEMBER SUKSES ================= */}
+      {newlyRegisteredMember && (
+        <MemberCardSuccessModal
+          isOpen={Boolean(newlyRegisteredMember)}
+          onClose={() => setNewlyRegisteredMember(null)}
+          member={newlyRegisteredMember}
+          tier={tiers.find((t) => t.id === newlyRegisteredMember.tierId) || tiers[0]}
+          onContinue={() => {
+            setNewlyRegisteredMember(null);
+            onNavigate('admin_members');
+          }}
+          continueButtonText="Buka Database Member"
+          title="Member Baru Berhasil Didaftarkan! Kartu Digital VIP Telah Diterbitkan 🎉"
+        />
+      )}
     </div>
   );
 };

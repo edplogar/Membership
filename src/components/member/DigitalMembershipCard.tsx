@@ -113,7 +113,7 @@ export const DigitalMembershipCard: React.FC<DigitalMembershipCardProps> = ({
         {/* Card Header */}
         <div className="relative z-10 flex items-start justify-between gap-3">
           <div className="flex items-center gap-2.5">
-            <div className="p-1 px-2 rounded-xl bg-white shadow-sm border border-stone-200/60">
+            <div className="bg-transparent p-0 border-none shadow-none flex items-center">
               <LombokGardenLogo variant="horizontal" size="sm" />
             </div>
           </div>
