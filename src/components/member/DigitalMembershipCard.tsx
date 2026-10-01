@@ -11,8 +11,11 @@ import {
   Calendar,
   Award,
   ScanLine,
+  Download,
 } from 'lucide-react';
 import { Modal } from '../common/Modal';
+import { downloadMemberCardImage } from '../../services/cardDownloadService';
+import { useToast } from '../../context/ToastContext';
 
 interface DigitalMembershipCardProps {
   member: Member;
@@ -27,8 +30,26 @@ export const DigitalMembershipCard: React.FC<DigitalMembershipCardProps> = ({
   nextTier,
   onViewBenefits,
 }) => {
+  const { showToast } = useToast();
   const [showFullQR, setShowFullQR] = useState(false);
   const [codeType, setCodeType] = useState<'qr' | 'barcode'>('qr');
+  const [isDownloading, setIsDownloading] = useState(false);
+
+  const handleDownloadCard = async () => {
+    setIsDownloading(true);
+    try {
+      const ok = await downloadMemberCardImage(member, tier);
+      if (ok) {
+        showToast('Kartu member digital berhasil diunduh (PNG)!', 'success');
+      } else {
+        showToast('Gagal mengunduh kartu member.', 'error');
+      }
+    } catch {
+      showToast('Gagal memproses pengunduhan kartu.', 'error');
+    } finally {
+      setIsDownloading(false);
+    }
+  };
 
   // Background and styling by tier
   const getCardTheme = () => {
@@ -206,19 +227,32 @@ export const DigitalMembershipCard: React.FC<DigitalMembershipCardProps> = ({
       )}
 
       {/* Quick Action Buttons */}
-      <div className="mt-3 flex items-center gap-2">
+      <div className="mt-3 flex flex-wrap items-center gap-2">
         <button
+          type="button"
           onClick={() => setShowFullQR(true)}
-          className="flex-1 py-2.5 px-3 bg-stone-900 hover:bg-stone-800 text-stone-100 rounded-xl text-xs font-semibold flex items-center justify-center gap-2 shadow-xs transition-colors"
+          className="flex-1 py-2.5 px-3 bg-stone-900 hover:bg-stone-800 text-stone-100 rounded-xl text-xs font-semibold flex items-center justify-center gap-2 shadow-xs transition-colors cursor-pointer"
         >
           <QrCode className="w-4 h-4 text-amber-400" />
-          <span>Tampilkan QR Member</span>
+          <span>QR Member</span>
+        </button>
+
+        <button
+          type="button"
+          onClick={handleDownloadCard}
+          disabled={isDownloading}
+          className="py-2.5 px-3.5 bg-emerald-800 hover:bg-emerald-900 text-white rounded-xl text-xs font-semibold flex items-center justify-center gap-1.5 shadow-xs transition-colors cursor-pointer disabled:opacity-50"
+          title="Unduh gambar kartu membership digital dalam format PNG resolusi tinggi"
+        >
+          <Download className="w-4 h-4 text-amber-300" />
+          <span>{isDownloading ? 'Mengunduh...' : 'Unduh Kartu'}</span>
         </button>
 
         {onViewBenefits && (
           <button
+            type="button"
             onClick={onViewBenefits}
-            className="py-2.5 px-4 bg-white hover:bg-stone-50 text-stone-800 border border-stone-300 rounded-xl text-xs font-semibold shadow-xs transition-colors"
+            className="py-2.5 px-3.5 bg-white hover:bg-stone-50 text-stone-800 border border-stone-300 rounded-xl text-xs font-semibold shadow-xs transition-colors cursor-pointer"
           >
             Lihat Benefit
           </button>

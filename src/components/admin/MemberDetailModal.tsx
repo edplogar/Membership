@@ -5,6 +5,7 @@ import { useAuth } from '../../context/AuthContext';
 import { useToast } from '../../context/ToastContext';
 import { formatIDR, formatDateIndo } from '../../services/membershipEngine';
 import { sendFirebasePasswordResetEmail } from '../../services/firebase';
+import { downloadMemberCardImage } from '../../services/cardDownloadService';
 import { Modal } from '../common/Modal';
 import { ConfirmDialog } from '../common/ConfirmDialog';
 import { QRCodeView } from '../common/QRCodeView';
@@ -24,6 +25,7 @@ import {
   CheckCircle,
   Trash2,
   KeyRound,
+  Download,
 } from 'lucide-react';
 
 interface MemberDetailModalProps {
@@ -54,11 +56,28 @@ export const MemberDetailModal: React.FC<MemberDetailModalProps> = ({
   const [newPassword, setNewPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
   const [isLoading, setIsLoading] = useState(false);
+  const [isDownloading, setIsDownloading] = useState(false);
 
   if (!member) return null;
 
   const currentTier: MembershipTier =
     tiers.find((t) => t.id === member.tierId) || tiers[0];
+
+  const handleDownloadCard = async () => {
+    setIsDownloading(true);
+    try {
+      const ok = await downloadMemberCardImage(member, currentTier);
+      if (ok) {
+        showToast(`Kartu member ${member.fullName} (${member.membershipNumber}) berhasil diunduh (PNG)!`, 'success');
+      } else {
+        showToast('Gagal mengunduh kartu member.', 'error');
+      }
+    } catch {
+      showToast('Gagal memproses kartu.', 'error');
+    } finally {
+      setIsDownloading(false);
+    }
+  };
 
   const memberStays = stays.filter((s) => s.memberId === member.id);
   const memberTransactions = transactions.filter((t) => t.memberId === member.id);
@@ -131,6 +150,18 @@ export const MemberDetailModal: React.FC<MemberDetailModalProps> = ({
                 Ubah Tier
               </button>
             )}
+
+            {/* Download Member Card PNG Action */}
+            <button
+              type="button"
+              onClick={handleDownloadCard}
+              disabled={isDownloading}
+              className="px-3 py-1.5 bg-emerald-800 hover:bg-emerald-700 text-white rounded-lg text-xs font-semibold shadow-xs transition-colors flex items-center gap-1.5 cursor-pointer disabled:opacity-50"
+              title="Unduh Kartu Membership Digital (Format PNG)"
+            >
+              <Download className="w-3.5 h-3.5 text-amber-300" />
+              <span>{isDownloading ? 'Mengunduh...' : 'Unduh Kartu'}</span>
+            </button>
 
             {/* Super Admin Reset Password Action */}
             {userRole === 'SUPER_ADMIN' && (

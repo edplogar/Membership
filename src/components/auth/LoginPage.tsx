@@ -2,7 +2,9 @@ import React, { useState, useEffect } from 'react';
 import { useAuth } from '../../context/AuthContext';
 import { useApp } from '../../context/AppContext';
 import { useToast } from '../../context/ToastContext';
+import { Member } from '../../types';
 import { LombokGardenLogo } from '../common/LombokGardenLogo';
+import { MemberCardSuccessModal } from '../common/MemberCardSuccessModal';
 import { sendFirebasePasswordResetEmail } from '../../services/firebase';
 import {
   MEMBER_CUSTOM_DOMAIN,
@@ -32,11 +34,12 @@ interface LoginPageProps {
 
 export const LoginPage: React.FC<LoginPageProps> = ({ onSuccess }) => {
   const { login, findAccountByIdentifier, resetPasswordWithRecovery } = useAuth();
-  const { addMember } = useApp();
+  const { addMember, tiers } = useApp();
   const { showToast } = useToast();
 
   // Mode: 'login' | 'register' | 'forgot' | 'reset'
   const [authMode, setAuthMode] = useState<'login' | 'register' | 'forgot' | 'reset'>('login');
+  const [newlyRegisteredMember, setNewlyRegisteredMember] = useState<Member | null>(null);
 
   // Unified login form state (Email or Username)
   const [identifier, setIdentifier] = useState('');
@@ -187,10 +190,9 @@ export const LoginPage: React.FC<LoginPageProps> = ({ onSuccess }) => {
         internalNotes: 'Pendaftaran mandiri akun member melalui portal web.',
       });
 
-      // Auto-login into newly created member
-      login(newMember.email);
-      showToast(`Pendaftaran berhasil! Selamat bergabung, ${newMember.fullName}.`, 'success');
-      if (onSuccess) onSuccess();
+      // Display member card visualization upon initial registration
+      setNewlyRegisteredMember(newMember);
+      showToast(`Pendaftaran berhasil! Kartu digital resmi telah diterbitkan untuk ${newMember.fullName}.`, 'success');
     } catch (err: unknown) {
       const errText = err instanceof Error ? err.message : String(err);
       setErrorMessage(`Gagal mendaftar: ${errText}`);
@@ -866,6 +868,33 @@ export const LoginPage: React.FC<LoginPageProps> = ({ onSuccess }) => {
           <span className="text-[#00A651] font-semibold">Lombok Hospitality Management</span>
         </div>
       </footer>
+
+      {/* Member Card Visualization Upon Initial Registration Modal */}
+      {newlyRegisteredMember && (
+        <MemberCardSuccessModal
+          isOpen={Boolean(newlyRegisteredMember)}
+          onClose={() => {
+            const mem = newlyRegisteredMember;
+            setNewlyRegisteredMember(null);
+            if (mem) {
+              login(mem.email);
+              if (onSuccess) onSuccess();
+            }
+          }}
+          member={newlyRegisteredMember}
+          tier={tiers.find((t) => t.id === newlyRegisteredMember.tierId) || tiers[0]}
+          onContinue={() => {
+            const mem = newlyRegisteredMember;
+            setNewlyRegisteredMember(null);
+            if (mem) {
+              login(mem.email);
+              if (onSuccess) onSuccess();
+            }
+          }}
+          continueButtonText="Masuk ke Portal Member"
+          title="Pendaftaran Berhasil! Kartu Membership Digital Telah Terbit 🎉"
+        />
+      )}
     </div>
   );
 };

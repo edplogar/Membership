@@ -6,8 +6,10 @@ import { Member, MembershipTier } from '../../types';
 import { formatIDR, formatDateIndo } from '../../services/membershipEngine';
 import { exportToCSV } from '../../services/exportService';
 import { sendFirebasePasswordResetEmail } from '../../services/firebase';
+import { downloadMemberCardImage } from '../../services/cardDownloadService';
 import { Modal } from '../common/Modal';
 import { ConfirmDialog } from '../common/ConfirmDialog';
+import { MemberCardSuccessModal } from '../common/MemberCardSuccessModal';
 import {
   Search,
   Filter,
@@ -69,6 +71,26 @@ export const MemberList: React.FC<MemberListProps> = ({
   const [adminNewPassword, setAdminNewPassword] = useState('');
   const [adminConfirmPassword, setAdminConfirmPassword] = useState('');
   const [isResetActionLoading, setIsResetActionLoading] = useState(false);
+  const [newlyCreatedMember, setNewlyCreatedMember] = useState<Member | null>(null);
+  const [downloadingMemberId, setDownloadingMemberId] = useState<string | null>(null);
+
+  // Download member card image
+  const handleDownloadMemberCard = async (m: Member) => {
+    const tier = tiers.find((t) => t.id === m.tierId) || tiers[0];
+    setDownloadingMemberId(m.id);
+    try {
+      const ok = await downloadMemberCardImage(m, tier);
+      if (ok) {
+        showToast(`Kartu member ${m.fullName} (${m.membershipNumber}) berhasil diunduh (PNG)!`, 'success');
+      } else {
+        showToast('Gagal mengunduh kartu member.', 'error');
+      }
+    } catch {
+      showToast('Gagal memproses kartu.', 'error');
+    } finally {
+      setDownloadingMemberId(null);
+    }
+  };
 
   // Form State for Add Member
   const [newMemberForm, setNewMemberForm] = useState({
@@ -183,7 +205,7 @@ export const MemberList: React.FC<MemberListProps> = ({
     const now = new Date().toISOString().slice(0, 10);
     const end = new Date(Date.now() + 24 * 30 * 86400000).toISOString().slice(0, 10);
 
-    addMember({
+    const created = addMember({
       ...newMemberForm,
       registrationDate: now,
       membershipStartDate: now,
@@ -193,6 +215,7 @@ export const MemberList: React.FC<MemberListProps> = ({
     });
 
     handleCloseAddModal();
+    setNewlyCreatedMember(created);
   };
 
   // Toggle member status
@@ -400,6 +423,17 @@ export const MemberList: React.FC<MemberListProps> = ({
                             title="Lihat Profil Lengkap"
                           >
                             <Eye className="w-3.5 h-3.5" />
+                          </button>
+
+                          {/* Download Member Card PNG */}
+                          <button
+                            type="button"
+                            onClick={() => handleDownloadMemberCard(m)}
+                            disabled={downloadingMemberId === m.id}
+                            className="p-1.5 text-stone-600 hover:text-emerald-700 hover:bg-emerald-50 rounded-lg transition-colors cursor-pointer disabled:opacity-50"
+                            title="Unduh Kartu Membership Digital (PNG)"
+                          >
+                            <Download className="w-3.5 h-3.5" />
                           </button>
 
                           {/* Quick Adjust points */}
@@ -850,6 +884,23 @@ export const MemberList: React.FC<MemberListProps> = ({
         confirmText="Hapus Permanen"
         isDestructive={true}
       />
+
+      {/* Member Card Visualization Upon Registration / Creation Modal */}
+      {newlyCreatedMember && (
+        <MemberCardSuccessModal
+          isOpen={Boolean(newlyCreatedMember)}
+          onClose={() => setNewlyCreatedMember(null)}
+          member={newlyCreatedMember}
+          tier={tiers.find((t) => t.id === newlyCreatedMember.tierId) || tiers[0]}
+          onContinue={() => {
+            const mem = newlyCreatedMember;
+            setNewlyCreatedMember(null);
+            if (mem) onSelectMember(mem);
+          }}
+          continueButtonText="Buka Profil Lengkap Member"
+          title="Member Baru Berhasil Didaftarkan! Kartu Digital Telah Diterbitkan 🎉"
+        />
+      )}
     </div>
   );
 };

@@ -88,7 +88,7 @@ export const INITIAL_PING_CONFIG: PingCoIdWhatsAppConfig = {
   messageQuota: 5000,
   lastCheckedAt: new Date().toISOString(),
   messageTemplateWelcome:
-    'Halo *{fullName}*, selamat bergabung di *Lombok Garden Hotel Hospitality Club*! 🌿🏨\n\nNomor Member: *{membershipNumber}*\nTier: *{tierName}*\n\nAkses kartu digital eksklusif Anda di:\n{cardUrl}\n\nTunjukkan kartu digital ini saat check-in atau bersantap untuk diskon khusus dan perolehan poin loyalitas.',
+    'Halo *{fullName}*, selamat bergabung di *Lombok Garden Hotel Hospitality Club*! 🌿🏨\n\nNomor Member: *{membershipNumber}*\nTier: *{tierName}*\n\nAkses kartu digital dan login ke portal member Anda di:\nhttps://member.lombokgardenhotel.com\n\nTunjukkan kartu digital ini saat check-in atau bersantap untuk diskon khusus dan perolehan poin loyalitas.',
   messageTemplatePoints:
     'Halo *{fullName}*,\n\nTransaksi Anda sebesar *{amount}* di Lombok Garden Hotel telah berhasil! 🎉\n\n+*{pointsEarned} Poin* telah ditambahkan ke akun Anda.\nTotal Saldo Poin Saat Ini: *{availablePoints} Poin*.\n\nTerima kasih atas kunjungan Anda!',
   messageTemplateTierUpgrade:
@@ -339,7 +339,7 @@ export async function simulateWebhookIncoming(
     reply = '🌿 Total saldo poin loyalty Anda saat ini adalah 3.250 Poin (Tier: Gold).';
   } else if (clean.includes('KARTU')) {
     matched = 'Keyword Rule: Akses Kartu Digital';
-    reply = '🌿 Buka link kartu digital Anda di: https://membership.lombokgardenhotel.com/card/LGH-001088';
+    reply = '🌿 Buka link portal & kartu digital Anda di: https://member.lombokgardenhotel.com';
   } else if (clean.includes('PROMO')) {
     matched = 'Keyword Rule: Promo Terkini';
     reply = '🎉 Promo Weekend: Diskon 25% Kamar Deluxe + Double Points F&B.';
@@ -361,7 +361,7 @@ export function formatWelcomeWhatsApp(
   tier: MembershipTier,
   config: PingCoIdWhatsAppConfig
 ): string {
-  const cardUrl = `${getBaseAppUrl()}/card/${member.membershipNumber}`;
+  const cardUrl = 'https://member.lombokgardenhotel.com';
   return (config.messageTemplateWelcome || INITIAL_PING_CONFIG.messageTemplateWelcome)
     .replace('{fullName}', member.fullName)
     .replace('{membershipNumber}', member.membershipNumber)

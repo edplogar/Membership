@@ -21,10 +21,8 @@ Akun keanggotaan Anda telah aktif dengan nomor: {{membershipNumber}}
 Tingkat Keanggotaan: {{tierName}}
 Email Terdaftar (Akun Login): {{email}}
 
-Gunakan email terdaftar ini untuk masuk ke portal dan melakukan reset kata sandi jika diperlukan.
-
-Akses kartu digital Anda melalui tautan resmi berikut:
-{{cardUrl}}
+Akses kartu digital dan login ke akun member Anda melalui tautan resmi:
+https://member.lombokgardenhotel.com
 
 Nikmati kenyamanan beristirahat di resor tropis kami serta kumpulkan poin di setiap transaksi kamar, restoran, dan spa.
 
@@ -311,7 +309,7 @@ export async function sendWelcomeEmail(
   tier: MembershipTier,
   config: EmailSystemConfig
 ): Promise<EmailMessageLog> {
-  const cardUrl = `${getBaseAppUrl()}/card/${member.membershipNumber}`;
+  const cardUrl = 'https://member.lombokgardenhotel.com';
   const subject = (config.welcomeSubjectTemplate || INITIAL_EMAIL_CONFIG.welcomeSubjectTemplate)
     .replace('{{fullName}}', member.fullName)
     .replace('{{membershipNumber}}', member.membershipNumber);

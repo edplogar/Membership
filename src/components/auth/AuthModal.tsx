@@ -2,8 +2,10 @@ import React, { useState } from 'react';
 import { useAuth } from '../../context/AuthContext';
 import { useApp } from '../../context/AppContext';
 import { useToast } from '../../context/ToastContext';
+import { Member } from '../../types';
 import { Modal } from '../common/Modal';
 import { LombokGardenLogo } from '../common/LombokGardenLogo';
+import { MemberCardSuccessModal } from '../common/MemberCardSuccessModal';
 import { sendFirebasePasswordResetEmail } from '../../services/firebase';
 import { Lock, Mail, AlertCircle, CheckCircle2, Send, Clock, Shield } from 'lucide-react';
 
@@ -19,10 +21,11 @@ export const AuthModal: React.FC<AuthModalProps> = ({
   defaultMode = 'login',
 }) => {
   const { login, findAccountByIdentifier } = useAuth();
-  const { addMember } = useApp();
+  const { addMember, tiers } = useApp();
   const { showToast } = useToast();
 
   const [mode, setMode] = useState<'login' | 'register' | 'forgot'>(defaultMode);
+  const [newlyRegisteredMember, setNewlyRegisteredMember] = useState<Member | null>(null);
   const [loginEmail, setLoginEmail] = useState('');
   const [loginPassword, setLoginPassword] = useState('');
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
@@ -121,9 +124,8 @@ export const AuthModal: React.FC<AuthModalProps> = ({
       internalNotes: 'Pendaftaran mandiri melalui portal web.',
     });
 
-    login(newMember.email);
+    setNewlyRegisteredMember(newMember);
     showToast('Registrasi berhasil! Selamat bergabung di Lombok Garden Hotel.', 'success');
-    onClose();
   };
 
   return (
@@ -364,6 +366,33 @@ export const AuthModal: React.FC<AuthModalProps> = ({
           </div>
         )}
       </div>
+
+      {/* Member Card Visualization Upon Initial Registration */}
+      {newlyRegisteredMember && (
+        <MemberCardSuccessModal
+          isOpen={Boolean(newlyRegisteredMember)}
+          onClose={() => {
+            const mem = newlyRegisteredMember;
+            setNewlyRegisteredMember(null);
+            if (mem) {
+              login(mem.email);
+            }
+            onClose();
+          }}
+          member={newlyRegisteredMember}
+          tier={tiers.find((t) => t.id === newlyRegisteredMember.tierId) || tiers[0]}
+          onContinue={() => {
+            const mem = newlyRegisteredMember;
+            setNewlyRegisteredMember(null);
+            if (mem) {
+              login(mem.email);
+            }
+            onClose();
+          }}
+          continueButtonText="Masuk ke Portal Member"
+          title="Pendaftaran Berhasil! Kartu Membership Digital Telah Terbit 🎉"
+        />
+      )}
     </Modal>
   );
 };

@@ -592,7 +592,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
         fullName: newMember.fullName,
         phone: newMember.phone,
         tier: currentTier.name,
-        cardUrl: `${appUrl}/card/${newMember.membershipNumber}`,
+        cardUrl: 'https://member.lombokgardenhotel.com',
         registeredAt: new Date().toISOString(),
       })
         .then((log) => addWhatsAppLog(log))

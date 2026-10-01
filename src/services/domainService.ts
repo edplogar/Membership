@@ -97,11 +97,11 @@ export function getEffectiveOrigin(): string {
 }
 
 /**
- * Generate Member Digital Card public link
+ * Generate Member Digital Card link pointing directly to the member login portal
+ * at https://member.lombokgardenhotel.com
  */
-export function getDigitalCardUrl(membershipNumber: string): string {
-  const origin = getEffectiveOrigin();
-  return `${origin}/card/${membershipNumber}`;
+export function getDigitalCardUrl(membershipNumber?: string): string {
+  return `https://${MEMBER_CUSTOM_DOMAIN}`;
 }
 
 /**
