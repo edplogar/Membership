@@ -1,4 +1,5 @@
-import React, { useEffect, ReactNode } from 'react';
+import React, { useEffect, useState, ReactNode } from 'react';
+import { createPortal } from 'react-dom';
 import { X } from 'lucide-react';
 
 interface ModalProps {
@@ -18,6 +19,12 @@ export const Modal: React.FC<ModalProps> = ({
   children,
   maxWidth = 'lg',
 }) => {
+  const [mounted, setMounted] = useState(false);
+
+  useEffect(() => {
+    setMounted(true);
+  }, []);
+
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
       if (e.key === 'Escape' && isOpen) onClose();
@@ -38,7 +45,7 @@ export const Modal: React.FC<ModalProps> = ({
     };
   }, [isOpen]);
 
-  if (!isOpen) return null;
+  if (!isOpen || !mounted) return null;
 
   const maxWidthClasses = {
     sm: 'max-w-sm',
@@ -49,17 +56,18 @@ export const Modal: React.FC<ModalProps> = ({
     '4xl': 'max-w-4xl',
   };
 
-  return (
+  const modalNode = (
     <div
-      className="fixed inset-0 z-[9999] overflow-y-auto bg-stone-950/75 backdrop-blur-xs flex items-center justify-center p-3 sm:p-5 text-stone-900 antialiased font-sans"
+      className="fixed inset-0 z-[99999] overflow-y-auto bg-stone-950/80 backdrop-blur-sm flex items-center justify-center p-3 sm:p-5 text-stone-900 antialiased font-sans"
       onClick={onClose}
+      style={{ isolation: 'isolate' }}
     >
       <div
-        className={`relative w-full ${maxWidthClasses[maxWidth]} bg-white rounded-2xl shadow-2xl border border-stone-200 overflow-hidden transform transition-all my-auto max-h-[90vh] flex flex-col animate-in fade-in zoom-in-95 duration-150`}
+        className={`relative w-full ${maxWidthClasses[maxWidth]} bg-white rounded-2xl shadow-2xl border border-stone-200 overflow-hidden transform transition-all my-auto max-h-[92vh] flex flex-col animate-in fade-in zoom-in-95 duration-150 z-[100000]`}
         onClick={(e) => e.stopPropagation()}
       >
         {/* Header */}
-        <div className="flex items-start justify-between px-5 sm:px-6 py-4 border-b border-stone-100 bg-stone-50/80 shrink-0">
+        <div className="flex items-start justify-between px-5 sm:px-6 py-4 border-b border-stone-100 bg-stone-50/90 shrink-0">
           <div className="pr-4">
             <h3 className="text-base sm:text-lg font-bold text-stone-900 tracking-tight">
               {title}
@@ -79,11 +87,13 @@ export const Modal: React.FC<ModalProps> = ({
         </div>
 
         {/* Scrollable Content */}
-        <div className="px-5 sm:px-6 py-5 overflow-y-auto flex-1">
+        <div className="px-5 sm:px-6 py-5 overflow-y-auto flex-1 overscroll-contain">
           {children}
         </div>
       </div>
     </div>
   );
+
+  return createPortal(modalNode, document.body);
 };
 

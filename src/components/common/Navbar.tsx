@@ -90,7 +90,8 @@ export const Navbar: React.FC<NavbarProps> = ({
   const navLinks = getNavLinks();
 
   return (
-    <header className="sticky top-8 z-30 bg-[#072417]/95 backdrop-blur-md border-b border-[#0e4029] text-stone-100 shadow-md">
+    <>
+      <header className="sticky top-8 z-30 bg-[#072417]/95 backdrop-blur-md border-b border-[#0e4029] text-stone-100 shadow-md">
       {/* ROW 1: Brand Logo & Top Operation Actions */}
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 h-14 sm:h-16 flex items-center justify-between gap-3">
         {/* Brand Logo & Portal Tag */}
@@ -404,12 +405,13 @@ export const Navbar: React.FC<NavbarProps> = ({
           </nav>
         </div>
       </div>
-
-      {/* Universal User Profile Edit Modal */}
-      <UserProfileModal
-        isOpen={isProfileModalOpen}
-        onClose={() => setIsProfileModalOpen(false)}
-      />
     </header>
-  );
+
+    {/* Universal User Profile Edit Modal */}
+    <UserProfileModal
+      isOpen={isProfileModalOpen}
+      onClose={() => setIsProfileModalOpen(false)}
+    />
+  </>
+);
 };

@@ -623,18 +623,18 @@ export const UserProfileModal: React.FC<UserProfileModalProps> = ({
             </div>
           )}
 
-          {/* Footer Actions */}
-          <div className="pt-4 flex items-center justify-end gap-3 border-t border-stone-200">
+          {/* Footer Actions - Sticky at bottom with elevation */}
+          <div className="sticky bottom-0 bg-white/95 backdrop-blur-xs py-3 -mb-1 flex items-center justify-end gap-3 border-t border-stone-200 z-20 shadow-xs">
             <button
               type="button"
               onClick={onClose}
-              className="px-4 py-2 text-xs font-semibold text-stone-600 hover:bg-stone-100 rounded-xl transition-colors cursor-pointer"
+              className="px-4 py-2.5 text-xs font-semibold text-stone-600 hover:text-stone-900 hover:bg-stone-100 rounded-xl transition-colors cursor-pointer"
             >
               Batal
             </button>
             <button
               type="submit"
-              className="px-5 py-2.5 text-xs font-bold bg-[#00A651] hover:bg-[#009647] text-white rounded-xl shadow-xs transition-all cursor-pointer flex items-center gap-1.5"
+              className="px-5 py-2.5 text-xs font-bold bg-[#00A651] hover:bg-[#009647] text-white rounded-xl shadow-md hover:shadow-lg transition-all cursor-pointer flex items-center gap-1.5 ring-2 ring-emerald-500/20 active:scale-95"
             >
               <CheckCircle className="w-3.5 h-3.5" />
               <span>Simpan Perubahan Profil</span>
