@@ -18,7 +18,7 @@ export const StayManagement: React.FC<StayManagementProps> = ({
   isOpenNewStayModal = false,
   onCloseNewStayModal,
 }) => {
-  const { stays, members, recordStay, updateStayStatus } = useApp();
+  const { stays, members, tiers, recordStay, updateStayStatus } = useApp();
   const [statusFilter, setStatusFilter] = useState<string>('all');
   const [searchQuery, setSearchQuery] = useState('');
   const [internalModalOpen, setInternalModalOpen] = useState(false);
@@ -49,21 +49,28 @@ export const StayManagement: React.FC<StayManagementProps> = ({
   React.useEffect(() => {
     if (preselectedMember) {
       setFormData((prev) => ({ ...prev, memberId: preselectedMember.id }));
+    } else if (!formData.memberId && members.length > 0) {
+      setFormData((prev) => ({ ...prev, memberId: members[0].id }));
     }
-  }, [preselectedMember]);
+  }, [preselectedMember, members]);
 
   const filteredStays = stays.filter((s) => {
     const member = members.find((m) => m.id === s.memberId);
+    const q = (searchQuery || '').toLowerCase().trim();
     const matchSearch =
-      s.bookingNumber.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      s.roomNumber.includes(searchQuery) ||
-      member?.fullName.toLowerCase().includes(searchQuery.toLowerCase());
+      !q ||
+      (s.bookingNumber || '').toLowerCase().includes(q) ||
+      (s.roomNumber || '').includes(q) ||
+      (member?.fullName || '').toLowerCase().includes(q);
     const matchStatus = statusFilter === 'all' || s.status === statusFilter;
     return matchSearch && matchStatus;
   });
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
+    if (!formData.memberId) {
+      return;
+    }
     recordStay(formData);
     handleCloseModal();
   };
@@ -262,7 +269,7 @@ export const StayManagement: React.FC<StayManagementProps> = ({
             <div className="sm:col-span-2">
               <MemberSearchSelect
                 members={members}
-                tiers={[]}
+                tiers={tiers}
                 selectedMemberId={formData.memberId}
                 onSelectMember={(selected) =>
                   setFormData({ ...formData, memberId: selected.id })

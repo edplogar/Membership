@@ -20,6 +20,7 @@ export const PointsManagement: React.FC<PointsManagementProps> = ({
   const {
     pointTransactions,
     members,
+    tiers,
     pointRules,
     adjustPoints,
     savePointRules,
@@ -228,7 +229,7 @@ export const PointsManagement: React.FC<PointsManagementProps> = ({
           <div>
             <MemberSearchSelect
               members={members}
-              tiers={[]}
+              tiers={tiers}
               selectedMemberId={adjustForm.memberId}
               onSelectMember={(m) =>
                 setAdjustForm({ ...adjustForm, memberId: m.id })

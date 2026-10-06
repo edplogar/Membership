@@ -1256,6 +1256,29 @@ export const SuperAdminControlCenter: React.FC<SuperAdminControlCenterProps> = (
             </div>
           </div>
 
+          {/* 5b. Pencatatan Kunjungan Menginap (Stay) */}
+          <div
+            onClick={() => onNavigate('admin_stays')}
+            className="p-5 bg-white rounded-2xl border-2 border-emerald-700/30 hover:border-emerald-700 hover:shadow-md transition-all cursor-pointer group flex flex-col justify-between"
+          >
+            <div>
+              <div className="w-10 h-10 rounded-xl bg-emerald-50 text-emerald-800 flex items-center justify-center mb-3 group-hover:scale-105 transition-transform">
+                <BedDouble className="w-5 h-5" />
+              </div>
+              <h3 className="font-bold text-sm text-stone-900 group-hover:text-emerald-900 transition-colors flex items-center justify-between">
+                <span>Pencatatan Kunjungan & Stay</span>
+                <ArrowRight className="w-4 h-4 text-stone-400 group-hover:translate-x-1 transition-transform" />
+              </h3>
+              <p className="text-xs text-stone-500 mt-1 leading-relaxed">
+                Catat kunjungan menginap tamu, reservasi kamar hotel, riwayat check-in/out, dan evaluasi malam menginap.
+              </p>
+            </div>
+            <div className="mt-4 pt-3 border-t border-stone-100 flex items-center justify-between text-[11px] text-emerald-800 font-semibold">
+              <span>{stays.length} Riwayat Stay</span>
+              <span>Buka Modul Stay →</span>
+            </div>
+          </div>
+
           {/* 6. Pengaturan Global Hotel */}
           <div
             onClick={() => onNavigate('super_settings')}

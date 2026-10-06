@@ -14,9 +14,29 @@ interface MemberSearchSelectProps {
   helperText?: string;
 }
 
+const DEFAULT_TIER: MembershipTier = {
+  id: 'tier_member',
+  name: 'Member',
+  level: 1,
+  minSpending: 0,
+  minStays: 0,
+  minNights: 0,
+  pointMultiplier: 1,
+  roomDiscountPercent: 0,
+  fnbDiscountPercent: 0,
+  spaDiscountPercent: 0,
+  benefits: [],
+  colorHex: '#00A651',
+  badgeBg: 'bg-emerald-600',
+  icon: 'Shield',
+  validityMonths: 12,
+  description: 'Tier Standar',
+  isActive: true,
+};
+
 export const MemberSearchSelect: React.FC<MemberSearchSelectProps> = ({
-  members,
-  tiers,
+  members = [],
+  tiers = [],
   selectedMemberId,
   onSelectMember,
   label = 'Pilih & Cari Member Tamu',
@@ -30,14 +50,19 @@ export const MemberSearchSelect: React.FC<MemberSearchSelectProps> = ({
   const containerRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLInputElement>(null);
 
+  const safeTiers = useMemo(() => {
+    if (Array.isArray(tiers) && tiers.length > 0) return tiers;
+    return [DEFAULT_TIER];
+  }, [tiers]);
+
   const selectedMember = useMemo(
-    () => members.find((m) => m.id === selectedMemberId) || null,
+    () => (Array.isArray(members) ? members.find((m) => m?.id === selectedMemberId) : null) || null,
     [members, selectedMemberId]
   );
 
   const selectedTier = useMemo(
-    () => tiers.find((t) => t.id === selectedMember?.tierId) || tiers[0],
-    [tiers, selectedMember]
+    () => safeTiers.find((t) => t.id === selectedMember?.tierId) || safeTiers[0] || DEFAULT_TIER,
+    [safeTiers, selectedMember]
   );
 
   // Close dropdown on click outside
@@ -53,27 +78,35 @@ export const MemberSearchSelect: React.FC<MemberSearchSelectProps> = ({
 
   // Filter members based on query (by Name, Membership Number, or Phone)
   const filteredMembers = useMemo(() => {
-    const cleanQuery = query.toLowerCase().trim();
+    if (!Array.isArray(members)) return [];
+    const cleanQuery = (query || '').toLowerCase().trim();
     if (!cleanQuery) return members.slice(0, 8); // Top 8 members by default
 
     const cleanDigits = cleanQuery.replace(/[^0-9]/g, '');
 
     return members
       .filter((m) => {
+        if (!m) return false;
+        const fullName = m.fullName || '';
+        const nickname = m.nickname || '';
+        const membershipNumber = m.membershipNumber || '';
+        const phone = m.phone || '';
+        const email = m.email || '';
+
         const matchName =
-          m.fullName.toLowerCase().includes(cleanQuery) ||
-          (m.nickname && m.nickname.toLowerCase().includes(cleanQuery));
+          fullName.toLowerCase().includes(cleanQuery) ||
+          nickname.toLowerCase().includes(cleanQuery);
 
         const matchNumber =
-          m.membershipNumber.toLowerCase().includes(cleanQuery) ||
-          m.membershipNumber.replace(/[^a-zA-Z0-9]/g, '').toLowerCase().includes(cleanQuery.replace(/[^a-zA-Z0-9]/g, ''));
+          membershipNumber.toLowerCase().includes(cleanQuery) ||
+          membershipNumber.replace(/[^a-zA-Z0-9]/g, '').toLowerCase().includes(cleanQuery.replace(/[^a-zA-Z0-9]/g, ''));
 
-        const cleanPhoneDigits = m.phone.replace(/[^0-9]/g, '');
+        const cleanPhoneDigits = phone.replace(/[^0-9]/g, '');
         const matchPhone =
-          m.phone.includes(cleanQuery) ||
+          phone.includes(cleanQuery) ||
           (cleanDigits.length >= 3 && cleanPhoneDigits.includes(cleanDigits));
 
-        const matchEmail = m.email.toLowerCase().includes(cleanQuery);
+        const matchEmail = email.toLowerCase().includes(cleanQuery);
 
         return matchName || matchNumber || matchPhone || matchEmail;
       })
@@ -125,13 +158,13 @@ export const MemberSearchSelect: React.FC<MemberSearchSelectProps> = ({
                 className="w-10 h-10 rounded-xl flex items-center justify-center font-serif text-sm font-bold text-white shadow-xs shrink-0"
                 style={{ backgroundColor: selectedTier?.colorHex || '#00A651' }}
               >
-                {selectedMember.fullName.charAt(0)}
+                {(selectedMember.fullName || 'M').charAt(0).toUpperCase()}
               </div>
 
               <div>
                 <div className="flex items-center gap-2 flex-wrap">
                   <span className="font-bold text-xs sm:text-sm text-stone-900 group-hover:text-[#00A651] transition-colors">
-                    {selectedMember.fullName}
+                    {selectedMember.fullName || 'Tamu Hotel'}
                   </span>
                   <span
                     className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold uppercase tracking-wider"
@@ -144,20 +177,20 @@ export const MemberSearchSelect: React.FC<MemberSearchSelectProps> = ({
                     {selectedTier?.name || 'Member'}
                   </span>
                   <span className="px-1.5 py-0.5 rounded bg-stone-200 text-stone-700 text-[10px] font-mono font-bold">
-                    {selectedMember.status}
+                    {selectedMember.status || 'ACTIVE'}
                   </span>
                 </div>
 
                 <div className="text-[11px] text-stone-500 mt-0.5 flex items-center gap-3 flex-wrap">
                   <span className="font-mono text-[#00A651] font-semibold bg-[#00A651]/10 px-1.5 py-0.2 rounded">
-                    {selectedMember.membershipNumber}
+                    {selectedMember.membershipNumber || '-'}
                   </span>
                   <span className="flex items-center gap-1 font-mono text-stone-600">
                     <Phone className="w-3 h-3 text-stone-400" />
-                    {selectedMember.phone}
+                    {selectedMember.phone || '-'}
                   </span>
                   <span className="text-amber-700 font-semibold font-mono">
-                    {selectedMember.availablePoints.toLocaleString('id-ID')} pts
+                    {(selectedMember.availablePoints || 0).toLocaleString('id-ID')} pts
                   </span>
                 </div>
               </div>
@@ -228,8 +261,10 @@ export const MemberSearchSelect: React.FC<MemberSearchSelectProps> = ({
                 </div>
               ) : (
                 filteredMembers.map((m) => {
-                  const mTier = tiers.find((t) => t.id === m.tierId) || tiers[0];
+                  const mTier = safeTiers.find((t) => t.id === m.tierId) || safeTiers[0] || DEFAULT_TIER;
                   const isCurrent = m.id === selectedMemberId;
+                  const tierColor = mTier?.colorHex || '#00A651';
+                  const tierName = mTier?.name || 'Member';
 
                   return (
                     <button
@@ -243,39 +278,39 @@ export const MemberSearchSelect: React.FC<MemberSearchSelectProps> = ({
                       <div className="flex items-center gap-3">
                         <div
                           className="w-9 h-9 rounded-xl flex items-center justify-center font-serif text-xs font-bold text-white shadow-2xs shrink-0"
-                          style={{ backgroundColor: mTier.colorHex || '#00A651' }}
+                          style={{ backgroundColor: tierColor }}
                         >
-                          {m.fullName.charAt(0)}
+                          {(m.fullName || 'M').charAt(0).toUpperCase()}
                         </div>
 
                         <div>
                           <div className="flex items-center gap-2 flex-wrap">
                             <span className="font-bold text-xs text-stone-900">
-                              {m.fullName}
+                              {m.fullName || 'Tamu Hotel'}
                             </span>
                             <span
                               className="px-1.5 py-0.2 rounded text-[9px] font-bold uppercase tracking-wider"
                               style={{
-                                backgroundColor: `${mTier.colorHex}20`,
-                                color: mTier.colorHex,
+                                backgroundColor: `${tierColor}20`,
+                                color: tierColor,
                               }}
                             >
-                              {mTier.name}
+                              {tierName}
                             </span>
                           </div>
 
                           <div className="text-[11px] text-stone-500 mt-0.5 flex items-center gap-2.5 flex-wrap">
                             <span className="font-mono text-[#00A651] font-bold">
-                              {m.membershipNumber}
+                              {m.membershipNumber || '-'}
                             </span>
                             <span className="text-stone-300">·</span>
                             <span className="font-mono text-stone-600 flex items-center gap-1">
                               <Phone className="w-2.5 h-2.5 text-[#00A651]" />
-                              {m.phone}
+                              {m.phone || '-'}
                             </span>
                             <span className="text-stone-300">·</span>
                             <span className="font-mono text-amber-700 font-semibold">
-                              {m.availablePoints.toLocaleString('id-ID')} pts
+                              {(m.availablePoints || 0).toLocaleString('id-ID')} pts
                             </span>
                           </div>
                         </div>

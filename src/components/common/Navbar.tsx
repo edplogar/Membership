@@ -76,6 +76,7 @@ export const Navbar: React.FC<NavbarProps> = ({
       return [
         { id: 'super_dashboard', label: 'Control Center' },
         { id: 'admin_members', label: 'Member' },
+        { id: 'admin_stays', label: 'Stay & Kunjungan' },
         { id: 'admin_transactions', label: 'Transaksi' },
         { id: 'admin_rewards', label: 'Voucher & Promo' },
         { id: 'admin_points', label: 'Poin' },
