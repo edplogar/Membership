@@ -35,7 +35,7 @@ export const UserProfileModal: React.FC<UserProfileModalProps> = ({
   const { tiers } = useApp();
   const { showToast } = useToast();
 
-  const isStaffOrAdmin = userRole === 'ADMIN' || userRole === 'SUPER_ADMIN';
+  const isStaffOrAdmin = userRole !== 'MEMBER';
 
   // Active sub-tab inside the profile modal
   const [activeTab, setActiveTab] = useState<'profile' | 'security' | 'info'>('profile');
@@ -205,6 +205,10 @@ export const UserProfileModal: React.FC<UserProfileModalProps> = ({
                       ? 'bg-amber-400 text-stone-950 shadow-xs'
                       : userRole === 'ADMIN'
                       ? 'bg-emerald-400 text-stone-950 shadow-xs'
+                      : userRole === 'OPERATOR_FO'
+                      ? 'bg-blue-400 text-stone-950 shadow-xs'
+                      : userRole === 'OPERATOR_FB'
+                      ? 'bg-purple-400 text-stone-950 shadow-xs'
                       : 'bg-emerald-600 text-white'
                   }`}
                 >
@@ -212,6 +216,10 @@ export const UserProfileModal: React.FC<UserProfileModalProps> = ({
                     ? 'Super Administrator'
                     : userRole === 'ADMIN'
                     ? 'Hotel Admin'
+                    : userRole === 'OPERATOR_FO'
+                    ? 'Operator FO'
+                    : userRole === 'OPERATOR_FB'
+                    ? 'Operator F&B'
                     : currentTier?.name || 'Member'}
                 </span>
               </div>
@@ -616,6 +624,10 @@ export const UserProfileModal: React.FC<UserProfileModalProps> = ({
                       ? 'Akses penuh ke seluruh konfigurasi sistem, database, audit, dan WhatsApp CRM.'
                       : userRole === 'ADMIN'
                       ? 'Akses operasional reservasi, transaksi Front Desk, scanner, dan penukaran poin.'
+                      : userRole === 'OPERATOR_FO'
+                      ? 'Akses operasional Front Desk, check-in stay, transaksi, dan verifikasi voucher.'
+                      : userRole === 'OPERATOR_FB'
+                      ? 'Akses posting bill transaksi resto/bar dan verifikasi voucher belanja.'
                       : 'Akses kartu keanggotaan digital, katalog reward, dan riwayat menginap.'}
                   </div>
                 </div>

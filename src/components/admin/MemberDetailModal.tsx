@@ -48,7 +48,7 @@ export const MemberDetailModal: React.FC<MemberDetailModalProps> = ({
   onActionChangeTier,
 }) => {
   const { tiers, stays, transactions, pointTransactions, redemptions, deleteMember } = useApp();
-  const { userRole, resetPasswordWithRecovery } = useAuth();
+  const { userRole, resetPasswordWithRecovery, hasPermission } = useAuth();
   const { showToast } = useToast();
   const [activeTab, setActiveTab] = useState<'profile' | 'stays' | 'spending' | 'loyalty' | 'timeline'>('profile');
   const [isConfirmDeleteOpen, setIsConfirmDeleteOpen] = useState(false);
@@ -163,8 +163,8 @@ export const MemberDetailModal: React.FC<MemberDetailModalProps> = ({
               <span>{isDownloading ? 'Mengunduh...' : 'Unduh Kartu'}</span>
             </button>
 
-            {/* Super Admin Reset Password Action */}
-            {userRole === 'SUPER_ADMIN' && (
+            {/* Reset Password Action */}
+            {(userRole === 'SUPER_ADMIN' || hasPermission('security.manage')) && (
               <button
                 type="button"
                 onClick={() => {
@@ -173,15 +173,15 @@ export const MemberDetailModal: React.FC<MemberDetailModalProps> = ({
                   setIsResetPasswordOpen(true);
                 }}
                 className="px-3 py-1.5 bg-amber-600/20 hover:bg-amber-600 text-amber-300 hover:text-white rounded-lg text-xs font-semibold border border-amber-500/40 transition-colors flex items-center gap-1.5 cursor-pointer"
-                title="Atur Ulang Kata Sandi Akun Member (Khusus Super Admin)"
+                title="Atur Ulang Kata Sandi Akun Member"
               >
                 <KeyRound className="w-3.5 h-3.5" />
                 <span>Reset Sandi</span>
               </button>
             )}
 
-            {/* Super Admin Permanent Delete Action */}
-            {userRole === 'SUPER_ADMIN' && (
+            {/* Permanent Delete Action */}
+            {(userRole === 'SUPER_ADMIN' || hasPermission('member.delete')) && (
               <button
                 type="button"
                 onClick={() => setIsConfirmDeleteOpen(true)}

@@ -47,28 +47,57 @@ import { LoginPage } from './components/auth/LoginPage';
 import { LombokGardenLogo } from './components/common/LombokGardenLogo';
 
 function MainApp() {
-  const { currentUser, currentMember, userRole } = useAuth();
-  const { tiers, members, isSyncModalOpen, closeSyncModal } = useApp();
+  const { currentUser, currentMember, userRole, hasPermission } = useAuth();
+  const { tiers, members, roles, isSyncModalOpen, closeSyncModal } = useApp();
+
+  const isTabPermitted = (tab: string): boolean => {
+    if (!currentUser) return false;
+    if (userRole === 'MEMBER') {
+      return ['dashboard', 'membership', 'benefits', 'points', 'vouchers', 'history', 'profile'].includes(tab);
+    }
+    if (userRole === 'SUPER_ADMIN') return true;
+
+    // Staff / Admin permission-based check
+    if (tab === 'admin_dashboard') return true;
+    if (tab === 'super_dashboard') return hasPermission('security.manage');
+    if (tab === 'admin_members') return hasPermission('member.view');
+    if (tab === 'admin_stays') return hasPermission('stay.view') || hasPermission('stay.create') || hasPermission('stay.edit');
+    if (tab === 'admin_transactions') return hasPermission('transaction.view') || hasPermission('transaction.create');
+    if (tab === 'admin_rewards') return hasPermission('reward.view') || hasPermission('voucher.view') || hasPermission('voucher.redeem') || hasPermission('voucher.scan_only') || hasPermission('promotion.view');
+    if (tab === 'admin_points') return hasPermission('points.view') || hasPermission('points.adjust');
+    if (tab === 'admin_tiers') return hasPermission('tier.view') || hasPermission('rule.view');
+    if (tab === 'admin_reports') return hasPermission('reports.view') || hasPermission('reports.export');
+    if (tab === 'admin_audit') return hasPermission('audit.view');
+    if (tab === 'super_admins') return hasPermission('admin.view') || hasPermission('admin.create') || hasPermission('security.manage');
+    if (tab === 'super_roles') return hasPermission('security.manage');
+    if (tab === 'super_whatsapp') return hasPermission('settings.view');
+    if (tab === 'super_email') return hasPermission('settings.view');
+    if (tab === 'super_settings') return hasPermission('settings.view') || hasPermission('settings.edit');
+    return false;
+  };
 
   // Active navigation tab
   const [activeTab, setActiveTab] = useState<string>(() =>
     userRole === 'MEMBER'
       ? 'dashboard'
-      : userRole === 'ADMIN'
-      ? 'admin_dashboard'
-      : 'super_dashboard'
+      : userRole === 'SUPER_ADMIN'
+      ? 'super_dashboard'
+      : 'admin_dashboard'
   );
 
-  // Update tab when userRole changes
+  // Auto-redirect when userRole or permissions change
   React.useEffect(() => {
-    if (userRole === 'MEMBER' && !['dashboard', 'membership', 'benefits', 'points', 'vouchers', 'history', 'profile'].includes(activeTab)) {
-      setActiveTab('dashboard');
-    } else if (userRole === 'ADMIN' && ['dashboard', 'membership', 'super_dashboard', 'super_admins', 'super_roles', 'super_settings'].includes(activeTab)) {
-      setActiveTab('admin_dashboard');
-    } else if (userRole === 'SUPER_ADMIN' && activeTab === 'dashboard') {
-      setActiveTab('super_dashboard');
+    if (!currentUser) return;
+    if (!isTabPermitted(activeTab)) {
+      if (userRole === 'MEMBER') {
+        setActiveTab('dashboard');
+      } else if (userRole === 'SUPER_ADMIN') {
+        setActiveTab('super_dashboard');
+      } else {
+        setActiveTab('admin_dashboard');
+      }
     }
-  }, [userRole, activeTab]);
+  }, [userRole, currentUser?.roleId, activeTab, roles]);
 
   // Global modals state
   const [isScannerOpen, setIsScannerOpen] = useState(false);
@@ -182,9 +211,12 @@ function MainApp() {
           </>
         )}
 
-        {/* ================= ADMIN HOTEL PORTAL VIEWS ================= */}
-        {userRole === 'ADMIN' && (
+        {/* ================= STAFF & ADMINISTRATOR PORTAL VIEWS ================= */}
+        {userRole !== 'MEMBER' && (
           <>
+            {activeTab === 'super_dashboard' && (userRole === 'SUPER_ADMIN' || hasPermission('security.manage')) && (
+              <SuperAdminControlCenter onNavigate={setActiveTab} />
+            )}
             {activeTab === 'admin_dashboard' && (
               <AdminDashboard
                 onNavigate={setActiveTab}
@@ -244,69 +276,10 @@ function MainApp() {
               />
             )}
             {activeTab === 'admin_rewards' && <RewardsAndVouchersManagement />}
-            {activeTab === 'admin_reports' && <ReportsView />}
-            {activeTab === 'admin_audit' && <AuditLogsView />}
-          </>
-        )}
-
-        {/* ================= SUPER ADMIN PORTAL VIEWS ================= */}
-        {userRole === 'SUPER_ADMIN' && (
-          <>
-            {activeTab === 'super_dashboard' && (
-              <SuperAdminControlCenter onNavigate={setActiveTab} />
-            )}
-            {activeTab === 'admin_members' && (
-              <MemberList
-                onSelectMember={handleViewProfileMember}
-                onOpenCheckIn={handleCheckInMember}
-                onOpenAddTransaction={handleAddTxMember}
-                onOpenAdjustPoints={handleAdjustPointsMember}
-                onOpenChangeTier={handleChangeTierMember}
-                isAddModalOpen={isAddMemberOpen}
-                onCloseAddModal={() => setIsAddMemberOpen(false)}
-              />
-            )}
-            {activeTab === 'admin_points' && (
-              <PointsManagement
-                preselectedMember={prefilledMember}
-                isOpenAdjustModal={isAdjustPointsOpen}
-                onCloseAdjustModal={() => {
-                  setIsAdjustPointsOpen(false);
-                  setPrefilledMember(null);
-                }}
-              />
-            )}
             {activeTab === 'super_admins' && <AdminUsersManagement />}
             {activeTab === 'super_roles' && <RolePermissionsMatrix />}
             {activeTab === 'super_whatsapp' && <WhatsAppCRMHub />}
             {activeTab === 'super_email' && <EmailSystemHub onNavigate={setActiveTab} />}
-            {activeTab === 'admin_tiers' && (
-              <div className="space-y-12">
-                <TierManagement />
-                <RuleEngineConfig />
-              </div>
-            )}
-            {activeTab === 'admin_stays' && (
-              <StayManagement
-                preselectedMember={prefilledMember}
-                isOpenNewStayModal={isNewStayOpen}
-                onCloseNewStayModal={() => {
-                  setIsNewStayOpen(false);
-                  setPrefilledMember(null);
-                }}
-              />
-            )}
-            {activeTab === 'admin_transactions' && (
-              <TransactionManagement
-                preselectedMember={prefilledMember}
-                isOpenNewTxModal={isNewTxOpen}
-                onCloseNewTxModal={() => {
-                  setIsNewTxOpen(false);
-                  setPrefilledMember(null);
-                }}
-              />
-            )}
-            {activeTab === 'admin_rewards' && <RewardsAndVouchersManagement />}
             {activeTab === 'super_settings' && <SystemSettingsView />}
             {activeTab === 'admin_reports' && <ReportsView />}
             {activeTab === 'admin_audit' && <AuditLogsView />}

@@ -251,7 +251,13 @@ interface AppContextValue {
 const AppContext = createContext<AppContextValue | undefined>(undefined);
 
 export function AppProvider({ children }: { children: ReactNode }) {
-  const { currentUser, refreshMemberData } = useAuth();
+  const {
+    currentUser,
+    refreshMemberData,
+    updateAdministrator,
+    updateRolePermissions: authUpdateRolePermissions,
+    roles: authRoles,
+  } = useAuth();
   const { showToast } = useToast();
 
   const [members, setMembers] = useState<Member[]>(() => loadFromStorage('members', INITIAL_MEMBERS));
@@ -323,6 +329,13 @@ export function AppProvider({ children }: { children: ReactNode }) {
   useEffect(() => saveToStorage('whatsappLogs', whatsappLogs), [whatsappLogs]);
   useEffect(() => saveToStorage('emailConfig', emailConfig), [emailConfig]);
   useEffect(() => saveToStorage('emailLogs', emailLogs), [emailLogs]);
+
+  // Keep roles strictly synchronized with AuthContext state
+  useEffect(() => {
+    if (authRoles && authRoles.length > 0) {
+      setRoles(authRoles);
+    }
+  }, [authRoles]);
 
   // Firestore Real-time Listeners (multi-device & subdomain cloud synchronization)
   useEffect(() => {
@@ -1797,11 +1810,31 @@ export function AppProvider({ children }: { children: ReactNode }) {
 
   // Role Permissions
   const updateRolePermissions = (roleId: string, permissions: PermissionCode[]) => {
-    setRoles((prev) =>
-      prev.map((r) => (r.id === roleId ? { ...r, permissions } : r))
-    );
+    let updatedTargetRole: Role | null = null;
+    const updatedRoles = roles.map((r) => {
+      if (r.id === roleId || r.code === roleId) {
+        updatedTargetRole = { ...r, permissions };
+        return updatedTargetRole;
+      }
+      return r;
+    });
+
+    setRoles(updatedRoles);
+    saveToStorage('roles', updatedRoles);
+
+    // Call AuthContext update so session and hasPermission immediately update
+    authUpdateRolePermissions(roleId, permissions);
+
+    if (updatedTargetRole) {
+      try {
+        setDoc(doc(db, 'roles', (updatedTargetRole as Role).id), cleanFirestoreData(updatedTargetRole), { merge: true }).catch((err) => {
+          console.warn('[FIRESTORE ROLES SYNC ERROR]', err);
+        });
+      } catch {}
+    }
+
     logAudit('UPDATE_ROLE_PERMISSIONS', 'SECURITY', roleId, 'Previous permissions', `${permissions.length} permissions updated`);
-    showToast('Matriks izin peran berhasil diperbarui.', 'success');
+    showToast(`Matriks izin peran "${updatedTargetRole ? (updatedTargetRole as Role).name : roleId}" berhasil diperbarui dan diterapkan ke seluruh pengguna.`, 'success');
   };
 
   // User Management
@@ -1809,15 +1842,21 @@ export function AppProvider({ children }: { children: ReactNode }) {
     const cleaned = cleanFirestoreData(user);
     setUsers((prev) => {
       const exists = prev.some((u) => u.id === user.id);
-      return exists ? prev.map((u) => (u.id === user.id ? user : u)) : [...prev, user];
+      const updated = exists ? prev.map((u) => (u.id === user.id ? user : u)) : [...prev, user];
+      saveToStorage('users', updated);
+      return updated;
     });
+
+    // Update AuthContext session & user list
+    updateAdministrator(user.id, user);
+
     try {
-      await setDoc(doc(db, 'users', user.id), cleaned);
+      await setDoc(doc(db, 'users', user.id), cleaned, { merge: true });
     } catch (err) {
       console.warn('[FIRESTORE USER SYNC ERROR]', err);
     }
     logAudit('SAVE_USER', 'USERS', user.id, 'None', `User: ${user.name} (${user.email}) [Peran: ${user.role}]`);
-    showToast(`Akun "${user.name}" (${user.role}) berhasil disimpan ke database cloud.`, 'success');
+    showToast(`Akun "${user.name}" (${user.role}) berhasil disimpan. Hak akses langsung aktif.`, 'success');
   };
 
   const deleteUser = async (userId: string) => {

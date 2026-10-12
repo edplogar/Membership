@@ -34,7 +34,7 @@ export const Navbar: React.FC<NavbarProps> = ({
   onSearchClick,
   onOpenLogin,
 }) => {
-  const { currentUser, userRole, logout, isAuthenticated } = useAuth();
+  const { currentUser, userRole, logout, isAuthenticated, hasPermission } = useAuth();
   const { notifications, markNotificationRead, markAllNotificationsRead } = useApp();
   const [showNotifications, setShowNotifications] = useState(false);
   const [showUserMenu, setShowUserMenu] = useState(false);
@@ -49,7 +49,7 @@ export const Navbar: React.FC<NavbarProps> = ({
   );
   const unreadCount = userNotifs.filter((n) => !n.isRead).length;
 
-  // Determine top navigation links based on user role
+  // Determine top navigation links dynamically based on RBAC permissions and user role
   const getNavLinks = () => {
     if (userRole === 'MEMBER') {
       return [
@@ -60,32 +60,90 @@ export const Navbar: React.FC<NavbarProps> = ({
         { id: 'vouchers', label: 'Voucher Saya' },
         { id: 'history', label: 'Riwayat Menginap' },
       ];
-    } else if (userRole === 'ADMIN') {
-      return [
-        { id: 'admin_dashboard', label: 'Ringkasan' },
-        { id: 'admin_members', label: 'Data Member' },
-        { id: 'admin_stays', label: 'Stay & Kunjungan' },
-        { id: 'admin_transactions', label: 'Transaksi' },
-        { id: 'admin_rewards', label: 'Voucher & Promo' },
-        { id: 'admin_points', label: 'Poin & Loyalitas' },
-        { id: 'admin_tiers', label: 'Tier & Rules' },
-        { id: 'admin_reports', label: 'Laporan' },
-      ];
-    } else {
-      // SUPER_ADMIN
-      return [
-        { id: 'super_dashboard', label: 'Control Center' },
-        { id: 'admin_members', label: 'Member' },
-        { id: 'admin_stays', label: 'Stay & Kunjungan' },
-        { id: 'admin_transactions', label: 'Transaksi' },
-        { id: 'admin_rewards', label: 'Voucher & Promo' },
-        { id: 'admin_points', label: 'Poin' },
-        { id: 'super_email', label: 'Email & Reset' },
-        { id: 'super_whatsapp', label: 'WhatsApp CRM' },
-        { id: 'super_admins', label: 'Hak Akses' },
-        { id: 'admin_audit', label: 'Audit Log' },
-      ];
     }
+
+    const links: { id: string; label: string }[] = [];
+
+    // 1. Dashboard summary
+    if (userRole === 'SUPER_ADMIN') {
+      links.push({ id: 'super_dashboard', label: 'Control Center' });
+    } else {
+      links.push({ id: 'admin_dashboard', label: 'Ringkasan' });
+    }
+
+    // 2. Member data
+    if (hasPermission('member.view')) {
+      links.push({ id: 'admin_members', label: 'Data Member' });
+    }
+
+    // 3. Stay & Stays
+    if (hasPermission('stay.view') || hasPermission('stay.create') || hasPermission('stay.edit')) {
+      links.push({ id: 'admin_stays', label: 'Stay & Kunjungan' });
+    }
+
+    // 4. Transactions
+    if (hasPermission('transaction.view') || hasPermission('transaction.create')) {
+      links.push({ id: 'admin_transactions', label: 'Transaksi' });
+    }
+
+    // 5. Vouchers, Rewards & Promos
+    if (
+      hasPermission('reward.view') ||
+      hasPermission('reward.edit') ||
+      hasPermission('voucher.view') ||
+      hasPermission('voucher.redeem') ||
+      hasPermission('voucher.scan_only') ||
+      hasPermission('promotion.view')
+    ) {
+      links.push({ id: 'admin_rewards', label: 'Voucher & Promo' });
+    }
+
+    // 6. Points & Ledger
+    if (hasPermission('points.view') || hasPermission('points.adjust')) {
+      links.push({ id: 'admin_points', label: 'Poin & Loyalitas' });
+    }
+
+    // 7. Tiers & Rules
+    if (
+      hasPermission('tier.view') ||
+      hasPermission('tier.edit') ||
+      hasPermission('rule.view') ||
+      hasPermission('rule.edit')
+    ) {
+      links.push({ id: 'admin_tiers', label: 'Tier & Rules' });
+    }
+
+    // 8. Reports
+    if (hasPermission('reports.view') || hasPermission('reports.export')) {
+      links.push({ id: 'admin_reports', label: 'Laporan' });
+    }
+
+    // 9. Email Hub (Super admin or settings.view)
+    if (userRole === 'SUPER_ADMIN' || hasPermission('settings.view')) {
+      links.push({ id: 'super_email', label: 'Email & Reset' });
+    }
+
+    // 10. WhatsApp CRM (Super admin or settings.view)
+    if (userRole === 'SUPER_ADMIN' || hasPermission('settings.view')) {
+      links.push({ id: 'super_whatsapp', label: 'WhatsApp CRM' });
+    }
+
+    // 11. Admin & Hak Akses (RBAC)
+    if (
+      userRole === 'SUPER_ADMIN' ||
+      hasPermission('admin.view') ||
+      hasPermission('admin.create') ||
+      hasPermission('security.manage')
+    ) {
+      links.push({ id: 'super_admins', label: 'Hak Akses & Admin' });
+    }
+
+    // 12. Audit Logs
+    if (hasPermission('audit.view')) {
+      links.push({ id: 'admin_audit', label: 'Audit Log' });
+    }
+
+    return links;
   };
 
   const navLinks = getNavLinks();
@@ -102,9 +160,9 @@ export const Navbar: React.FC<NavbarProps> = ({
               onTabChange(
                 userRole === 'MEMBER'
                   ? 'dashboard'
-                  : userRole === 'ADMIN'
-                  ? 'admin_dashboard'
-                  : 'super_dashboard'
+                  : userRole === 'SUPER_ADMIN'
+                  ? 'super_dashboard'
+                  : 'admin_dashboard'
               )
             }
             className="text-left group cursor-pointer focus:outline-hidden py-1"
@@ -121,6 +179,10 @@ export const Navbar: React.FC<NavbarProps> = ({
                 ? 'Super Admin Hub'
                 : userRole === 'ADMIN'
                 ? 'Hotel Management Portal'
+                : userRole === 'OPERATOR_FO'
+                ? 'Front Office Operator Portal'
+                : userRole === 'OPERATOR_FB'
+                ? 'F&B Cashier Operator Portal'
                 : 'Membership & Loyalty Portal'}
             </span>
             <span className="text-[10px] text-emerald-100/60">

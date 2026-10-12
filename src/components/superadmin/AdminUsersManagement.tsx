@@ -28,7 +28,7 @@ import { useToast } from '../../context/ToastContext';
 
 export const AdminUsersManagement: React.FC = () => {
   const { users, roles, saveUser, deleteUser } = useApp();
-  const { currentUser, updateAdministrator } = useAuth();
+  const { currentUser, updateAdministrator, switchDemoRole } = useAuth();
   const { showToast } = useToast();
 
   const [editingUser, setEditingUser] = useState<User | null>(null);
@@ -293,9 +293,13 @@ export const AdminUsersManagement: React.FC = () => {
                     <td className="px-5 py-3.5">
                       <span
                         className={`inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[10px] font-bold uppercase font-mono ${
-                          isSuper
+                          u.role === 'SUPER_ADMIN'
                             ? 'bg-amber-100 text-amber-800'
-                            : 'bg-emerald-100 text-emerald-800'
+                            : u.role === 'ADMIN'
+                            ? 'bg-emerald-100 text-emerald-800'
+                            : u.role === 'OPERATOR_FO'
+                            ? 'bg-blue-100 text-blue-800'
+                            : 'bg-purple-100 text-purple-800'
                         }`}
                       >
                         <ShieldCheck className="w-3 h-3" />
@@ -325,7 +329,20 @@ export const AdminUsersManagement: React.FC = () => {
                     </td>
 
                     <td className="px-5 py-3.5">
-                      <div className="flex items-center justify-center gap-1.5">
+                      <div className="flex items-center justify-center gap-1.5 flex-wrap">
+                        {!isCurrent && (
+                          <button
+                            onClick={() => {
+                              switchDemoRole(u.id);
+                              showToast(`Beralih ke akun ${u.name} (${roleObj?.name || u.role}). Hak akses langsung aktif.`, 'info');
+                            }}
+                            className="px-2 py-1 bg-emerald-50 hover:bg-emerald-100 text-emerald-800 border border-emerald-200 rounded-lg transition-colors flex items-center gap-1 text-[11px] font-semibold cursor-pointer"
+                            title="Uji langsung hak akses akun ini"
+                          >
+                            <KeyRound className="w-3 h-3 text-emerald-700" />
+                            <span>Uji Akses</span>
+                          </button>
+                        )}
                         <button
                           onClick={() => handleEdit(u)}
                           className="px-2.5 py-1 bg-stone-100 hover:bg-stone-200 text-stone-800 rounded-lg transition-colors flex items-center gap-1 text-[11px] font-semibold cursor-pointer"

@@ -66,19 +66,14 @@ export const RewardsAndVouchersManagement: React.FC = () => {
     userRole === 'SUPER_ADMIN' ||
     currentUser?.role === 'SUPER_ADMIN';
 
-  // Rule enforcement: Check if current staff is restricted to barcode scan only (FO / FB staff)
-  const isScanOnlyStaff =
-    !isSuperUser &&
-    (hasPermission('voucher.scan_only') ||
-      userRole === 'OPERATOR_FO' ||
-      userRole === 'OPERATOR_FB' ||
-      currentUser?.role === 'OPERATOR_FO' ||
-      currentUser?.role === 'OPERATOR_FB' ||
-      currentUser?.roleId === 'role_operator_fo' ||
-      currentUser?.roleId === 'role_operator_fb' ||
-      currentUser?.department?.toLowerCase().includes('front office') ||
-      currentUser?.department?.toLowerCase().includes('food') ||
-      currentUser?.department?.toLowerCase().includes('f&b'));
+  // Rule enforcement: Check if user has permission to manage (create/edit) vouchers and rewards
+  const canManageVouchers =
+    isSuperUser ||
+    hasPermission('voucher.create') ||
+    hasPermission('voucher.edit') ||
+    hasPermission('reward.edit');
+
+  const isScanOnlyStaff = !canManageVouchers;
 
   const [activeTab, setActiveTab] = useState<'rewards' | 'vouchers' | 'promotions' | 'history'>('vouchers');
   const [isVoucherScannerOpen, setIsVoucherScannerOpen] = useState(false);

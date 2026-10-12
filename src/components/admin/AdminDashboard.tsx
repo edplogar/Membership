@@ -1,5 +1,6 @@
 import React from 'react';
 import { useApp } from '../../context/AppContext';
+import { useAuth } from '../../context/AuthContext';
 import { formatIDR, formatDateIndo } from '../../services/membershipEngine';
 import { DashboardWidget } from './DashboardWidget';
 import {
@@ -32,6 +33,7 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
   onOpenAddMember,
   onOpenVoucherScanner,
 }) => {
+  const { hasPermission } = useAuth();
   const {
     members,
     tiers,
@@ -104,7 +106,7 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
             <span>Pindai QR Tamu</span>
           </button>
 
-          {onOpenVoucherScanner && (
+          {onOpenVoucherScanner && (hasPermission('voucher.redeem') || hasPermission('voucher.scan_only')) && (
             <button
               onClick={onOpenVoucherScanner}
               className="px-4 py-2.5 bg-amber-600 hover:bg-amber-700 text-white rounded-xl text-xs font-bold flex items-center gap-2 shadow-xs transition-colors cursor-pointer"
@@ -114,13 +116,15 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
             </button>
           )}
 
-          <button
-            onClick={onOpenAddMember}
-            className="px-4 py-2.5 bg-[#00A651] hover:bg-[#008F45] text-white rounded-xl text-xs font-bold flex items-center gap-2 shadow-xs transition-colors cursor-pointer"
-          >
-            <UserPlus className="w-4 h-4" />
-            <span>+ Member Baru</span>
-          </button>
+          {hasPermission('member.create') && (
+            <button
+              onClick={onOpenAddMember}
+              className="px-4 py-2.5 bg-[#00A651] hover:bg-[#008F45] text-white rounded-xl text-xs font-bold flex items-center gap-2 shadow-xs transition-colors cursor-pointer"
+            >
+              <UserPlus className="w-4 h-4" />
+              <span>+ Member Baru</span>
+            </button>
+          )}
         </div>
       </div>
 

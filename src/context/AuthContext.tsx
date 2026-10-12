@@ -42,6 +42,7 @@ interface AuthContextValue {
     gender?: 'L' | 'P' | 'OTHER';
   }) => void;
   updateAdministrator: (userId: string, updates: Partial<User>) => void;
+  updateRolePermissions: (roleId: string, permissions: PermissionCode[]) => void;
   refreshMemberData: (member: Member) => void;
   findAccountByIdentifier: (identifier: string) => {
     email: string;
@@ -165,7 +166,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     if (!currentUser) return false;
     if (currentUser.role === 'SUPER_ADMIN') return true; // Super admin has universal permissions
 
-    const roleObj = roles.find((r) => r.id === currentUser.roleId);
+    const roleObj = roles.find((r) => r.id === currentUser.roleId || r.code === currentUser.role);
     if (!roleObj) return false;
     return roleObj.permissions.includes(permission);
   };
@@ -536,9 +537,23 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     let targetUpdated: User | null = null;
     const updatedUsers = users.map((u) => {
       if (u.id === userId) {
+        let finalRoleId = updates.roleId || u.roleId;
+        let finalRole = updates.role || u.role;
+
+        // Ensure role and roleId are strictly aligned
+        if (updates.roleId && !updates.role) {
+          const matched = roles.find((r) => r.id === updates.roleId);
+          if (matched) finalRole = matched.code as UserRoleType;
+        } else if (updates.role && !updates.roleId) {
+          const matched = roles.find((r) => r.code === updates.role);
+          if (matched) finalRoleId = matched.id;
+        }
+
         targetUpdated = {
           ...u,
           ...updates,
+          role: finalRole,
+          roleId: finalRoleId,
           username: updates.username ? updates.username.toLowerCase().trim() : u.username,
         };
         return targetUpdated;
@@ -555,6 +570,34 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         });
       } catch {}
     }
+
+    // Dispatch event so active sessions immediately recalculate RBAC
+    window.dispatchEvent(new CustomEvent('rbac_user_updated', { detail: { userId, updates: targetUpdated } }));
+  };
+
+  const updateRolePermissions = (roleId: string, permissions: PermissionCode[]) => {
+    let updatedTargetRole: Role | null = null;
+    const updatedRoles = roles.map((r) => {
+      if (r.id === roleId || r.code === roleId) {
+        updatedTargetRole = { ...r, permissions };
+        return updatedTargetRole;
+      }
+      return r;
+    });
+
+    setRoles(updatedRoles);
+    saveToStorage('roles', updatedRoles);
+
+    if (updatedTargetRole) {
+      try {
+        setDoc(doc(db, 'roles', (updatedTargetRole as Role).id), cleanFirestoreData(updatedTargetRole), { merge: true }).catch((err) => {
+          console.warn('[AUTH FIREBASE] Failed to sync updated role:', err);
+        });
+      } catch {}
+    }
+
+    // Trigger local window event for real-time response
+    window.dispatchEvent(new CustomEvent('rbac_permissions_updated', { detail: { roleId, permissions } }));
   };
 
   const refreshMemberData = (updatedMember: Member) => {
@@ -740,6 +783,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         updateCurrentUser,
         updateUserProfile,
         updateAdministrator,
+        updateRolePermissions,
         refreshMemberData,
         findAccountByIdentifier,
         resetPasswordWithRecovery,

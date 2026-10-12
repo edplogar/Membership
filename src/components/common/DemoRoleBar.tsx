@@ -44,16 +44,28 @@ export const DemoRoleBar: React.FC<DemoRoleBarProps> = ({ onOpenScanner }) => {
               ? 'bg-amber-500/20 text-amber-300 border border-amber-500/40'
               : userRole === 'ADMIN'
               ? 'bg-[#00A651]/20 text-emerald-300 border border-[#00A651]/40'
+              : userRole === 'OPERATOR_FO'
+              ? 'bg-blue-500/20 text-blue-300 border border-blue-500/40'
+              : userRole === 'OPERATOR_FB'
+              ? 'bg-purple-500/20 text-purple-300 border border-purple-500/40'
               : 'bg-stone-800 text-stone-200'
           }`}>
-            {userRole === 'SUPER_ADMIN' ? 'Super Admin' : userRole === 'ADMIN' ? 'Admin Hotel' : 'Member Tamu'}
+            {userRole === 'SUPER_ADMIN'
+              ? 'Super Admin'
+              : userRole === 'ADMIN'
+              ? 'Admin Hotel'
+              : userRole === 'OPERATOR_FO'
+              ? 'Operator FO'
+              : userRole === 'OPERATOR_FB'
+              ? 'Operator F&B'
+              : 'Member Tamu'}
           </span>
         </span>
       </div>
 
       <div className="flex items-center gap-2 flex-wrap">
-        {/* Front Desk Barcode Scanner (for staff/admin) */}
-        {(userRole === 'ADMIN' || userRole === 'SUPER_ADMIN') && (
+        {/* Front Desk Barcode Scanner (for all staff & admin roles) */}
+        {userRole !== 'MEMBER' && (
           <button
             onClick={onOpenScanner}
             className="px-2.5 py-1 rounded-lg bg-[#00A651] hover:bg-[#008f45] text-white font-semibold flex items-center gap-1.5 transition-colors cursor-pointer shadow-xs"

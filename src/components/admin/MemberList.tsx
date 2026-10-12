@@ -242,21 +242,25 @@ export const MemberList: React.FC<MemberListProps> = ({
         </div>
 
         <div className="flex items-center gap-2.5">
-          <button
-            onClick={handleExportCSV}
-            className="px-3.5 py-2 bg-white hover:bg-stone-50 text-stone-700 border border-stone-300 rounded-xl text-xs font-semibold flex items-center gap-1.5 shadow-xs transition-colors"
-          >
-            <Download className="w-3.5 h-3.5" />
-            <span>Ekspor CSV</span>
-          </button>
+          {hasPermission('reports.export') && (
+            <button
+              onClick={handleExportCSV}
+              className="px-3.5 py-2 bg-white hover:bg-stone-50 text-stone-700 border border-stone-300 rounded-xl text-xs font-semibold flex items-center gap-1.5 shadow-xs transition-colors cursor-pointer"
+            >
+              <Download className="w-3.5 h-3.5" />
+              <span>Ekspor CSV</span>
+            </button>
+          )}
 
-          <button
-            onClick={() => setInternalAddOpen(true)}
-            className="px-4 py-2 bg-emerald-800 hover:bg-emerald-900 text-white rounded-xl text-xs font-semibold flex items-center gap-1.5 shadow-xs transition-colors"
-          >
-            <UserPlus className="w-4 h-4" />
-            <span>+ Tambah Member</span>
-          </button>
+          {hasPermission('member.create') && (
+            <button
+              onClick={() => setInternalAddOpen(true)}
+              className="px-4 py-2 bg-emerald-800 hover:bg-emerald-900 text-white rounded-xl text-xs font-semibold flex items-center gap-1.5 shadow-xs transition-colors cursor-pointer"
+            >
+              <UserPlus className="w-4 h-4" />
+              <span>+ Tambah Member</span>
+            </button>
+          )}
         </div>
       </div>
 
@@ -437,61 +441,67 @@ export const MemberList: React.FC<MemberListProps> = ({
                           </button>
 
                           {/* Quick Adjust points */}
-                          <button
-                            onClick={() => onOpenAdjustPoints(m)}
-                            className="p-1.5 text-amber-600 hover:text-amber-800 hover:bg-amber-50 rounded-lg transition-colors"
-                            title="Sesuaikan Poin"
-                          >
-                            <Coins className="w-3.5 h-3.5" />
-                          </button>
+                          {hasPermission('points.adjust') && (
+                            <button
+                              onClick={() => onOpenAdjustPoints(m)}
+                              className="p-1.5 text-amber-600 hover:text-amber-800 hover:bg-amber-50 rounded-lg transition-colors cursor-pointer"
+                              title="Sesuaikan Poin"
+                            >
+                              <Coins className="w-3.5 h-3.5" />
+                            </button>
+                          )}
 
                           {/* Quick Change tier */}
-                          <button
-                            onClick={() => onOpenChangeTier(m)}
-                            className="p-1.5 text-emerald-700 hover:text-emerald-900 hover:bg-emerald-50 rounded-lg transition-colors"
-                            title="Ubah Tier Keanggotaan"
-                          >
-                            <Shield className="w-3.5 h-3.5" />
-                          </button>
+                          {hasPermission('member.tier_change') && (
+                            <button
+                              onClick={() => onOpenChangeTier(m)}
+                              className="p-1.5 text-emerald-700 hover:text-emerald-900 hover:bg-emerald-50 rounded-lg transition-colors cursor-pointer"
+                              title="Ubah Tier Keanggotaan"
+                            >
+                              <Shield className="w-3.5 h-3.5" />
+                            </button>
+                          )}
 
                           {/* Toggle Active status */}
-                          <button
-                            onClick={() => handleToggleStatus(m)}
-                            className={`p-1.5 rounded-lg transition-colors ${
-                              m.status === 'ACTIVE'
-                                ? 'text-stone-400 hover:text-rose-600 hover:bg-rose-50'
-                                : 'text-emerald-600 hover:bg-emerald-50'
-                            }`}
-                            title={m.status === 'ACTIVE' ? 'Nonaktifkan Member' : 'Aktifkan Kembali'}
-                          >
-                            {m.status === 'ACTIVE' ? (
-                              <XCircle className="w-3.5 h-3.5" />
-                            ) : (
-                              <CheckCircle className="w-3.5 h-3.5" />
-                            )}
-                          </button>
+                          {hasPermission('member.edit') && (
+                            <button
+                              onClick={() => handleToggleStatus(m)}
+                              className={`p-1.5 rounded-lg transition-colors cursor-pointer ${
+                                m.status === 'ACTIVE'
+                                  ? 'text-stone-400 hover:text-rose-600 hover:bg-rose-50'
+                                  : 'text-emerald-600 hover:bg-emerald-50'
+                              }`}
+                              title={m.status === 'ACTIVE' ? 'Nonaktifkan Member' : 'Aktifkan Kembali'}
+                            >
+                              {m.status === 'ACTIVE' ? (
+                                <XCircle className="w-3.5 h-3.5" />
+                              ) : (
+                                <CheckCircle className="w-3.5 h-3.5" />
+                              )}
+                            </button>
+                          )}
 
-                          {/* Reset password - STRICTLY FOR SUPER ADMIN */}
-                          {userRole === 'SUPER_ADMIN' && (
+                          {/* Reset password - STRICTLY FOR SUPER ADMIN OR SECURITY ADMIN */}
+                          {(userRole === 'SUPER_ADMIN' || hasPermission('security.manage')) && (
                             <button
                               onClick={() => {
                                 setMemberToResetPassword(m);
                                 setAdminNewPassword('');
                                 setAdminConfirmPassword('');
                               }}
-                              className="p-1.5 text-amber-600 hover:text-amber-800 hover:bg-amber-50 rounded-lg transition-colors"
-                              title="Atur Ulang Kata Sandi Member (Khusus Super Admin)"
+                              className="p-1.5 text-amber-600 hover:text-amber-800 hover:bg-amber-50 rounded-lg transition-colors cursor-pointer"
+                              title="Atur Ulang Kata Sandi Member"
                             >
                               <KeyRound className="w-3.5 h-3.5" />
                             </button>
                           )}
 
-                          {/* Delete Member - STRICTLY FOR SUPER ADMIN */}
-                          {userRole === 'SUPER_ADMIN' && (
+                          {/* Delete Member */}
+                          {(userRole === 'SUPER_ADMIN' || hasPermission('member.delete')) && (
                             <button
                               onClick={() => setMemberToDelete(m)}
-                              className="p-1.5 text-rose-500 hover:text-rose-700 hover:bg-rose-50 rounded-lg transition-colors"
-                              title="Hapus Member Permanen (Khusus Super Admin)"
+                              className="p-1.5 text-rose-500 hover:text-rose-700 hover:bg-rose-50 rounded-lg transition-colors cursor-pointer"
+                              title="Hapus Member Permanen"
                             >
                               <Trash2 className="w-3.5 h-3.5" />
                             </button>
